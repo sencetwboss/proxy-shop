@@ -7,12 +7,14 @@
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<!-- Firebase -->
 <script type="module" src="firebase-config.js"></script>
 <script type="module" src="auth.js"></script>
 <script type="module" src="app.js"></script>
 </head>
 <body>
 
+<!-- 登入畫面 -->
 <div id="login-screen">
   <div class="login-card">
     <div class="login-logo">🛍️</div>
@@ -31,17 +33,28 @@
   </div>
 </div>
 
+<!-- 主應用程式 -->
 <div id="main-app" class="hidden">
+
+  <!-- 側邊欄 -->
   <nav id="sidebar">
     <div class="sidebar-header">
       <span class="sidebar-logo">🛍️</span>
       <span class="sidebar-title">代購管理</span>
     </div>
     <div class="nav-links">
-      <a class="nav-item active" onclick="switchPage('orders',this)"><span class="nav-icon">📋</span><span class="nav-label">訂單管理</span></a>
-      <a class="nav-item" onclick="switchPage('customers',this)"><span class="nav-icon">👥</span><span class="nav-label">客戶管理</span></a>
-      <a class="nav-item" onclick="switchPage('products',this)"><span class="nav-icon">📦</span><span class="nav-label">商品管理</span></a>
-      <a class="nav-item" onclick="switchPage('purchase',this)"><span class="nav-icon">🛒</span><span class="nav-label">採買清單</span></a>
+      <a class="nav-item active" data-page="customers" onclick="switchPage('customers',this)">
+        <span class="nav-icon">👥</span><span class="nav-label">客戶管理</span>
+      </a>
+      <a class="nav-item" data-page="products" onclick="switchPage('products',this)">
+        <span class="nav-icon">📦</span><span class="nav-label">商品管理</span>
+      </a>
+      <a class="nav-item" data-page="orders" onclick="switchPage('orders',this)">
+        <span class="nav-icon">📋</span><span class="nav-label">訂單管理</span>
+      </a>
+      <a class="nav-item" data-page="purchase" onclick="switchPage('purchase',this)">
+        <span class="nav-icon">🛒</span><span class="nav-label">採買清單</span>
+      </a>
     </div>
     <div class="sidebar-footer">
       <div class="user-info">
@@ -52,19 +65,24 @@
     </div>
   </nav>
 
+  <!-- 漢堡選單（手機用） -->
   <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
   <div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
+  <!-- 主內容 -->
   <main id="main-content">
-    <div id="page-orders" class="page">
+
+    <!-- ===== 訂單管理 ===== -->
+    <div id="page-orders" class="page hidden">
       <div class="page-header">
         <h2>訂單管理</h2>
         <button class="btn primary" onclick="openOrderModal()">＋ 新增訂單</button>
       </div>
+      <!-- 篩選列 -->
       <div class="filter-bar">
-        <input type="date" id="filter-date-from" onchange="renderOrders()">
+        <input type="date" id="filter-date-from" placeholder="開始日期" onchange="renderOrders()">
         <span>～</span>
-        <input type="date" id="filter-date-to" onchange="renderOrders()">
+        <input type="date" id="filter-date-to" placeholder="結束日期" onchange="renderOrders()">
         <select id="filter-order-status" onchange="renderOrders()">
           <option value="">全部狀態</option>
           <option>採買中</option><option>待匯款</option><option>待寄出</option><option>已寄出</option>
@@ -74,7 +92,8 @@
       <div id="orders-list"></div>
     </div>
 
-    <div id="page-customers" class="page hidden">
+    <!-- ===== 客戶管理 ===== -->
+    <div id="page-customers" class="page">
       <div class="page-header">
         <h2>客戶管理</h2>
         <button class="btn primary" onclick="openCustomerModal()">＋ 新增客戶</button>
@@ -89,6 +108,7 @@
       <div id="customers-list"></div>
     </div>
 
+    <!-- ===== 商品管理 ===== -->
     <div id="page-products" class="page hidden">
       <div class="page-header">
         <h2>商品管理</h2>
@@ -105,6 +125,7 @@
       <div id="products-list"></div>
     </div>
 
+    <!-- ===== 採買清單 ===== -->
     <div id="page-purchase" class="page hidden">
       <div class="page-header">
         <h2>採買清單</h2>
@@ -112,17 +133,21 @@
       </div>
       <div id="purchase-list"></div>
     </div>
+
   </main>
 </div>
 
-<!-- 訂單 Modal -->
+<!-- ============================================================
+     訂單 Modal
+     ============================================================ -->
 <div class="modal-overlay hidden" id="order-modal-overlay">
-  <div class="modal large">
+  <div class="modal large" id="order-modal">
     <div class="modal-header">
       <h3 id="order-modal-title">新增訂單</h3>
       <button class="modal-close" onclick="closeModal('order-modal-overlay')">✕</button>
     </div>
     <div class="modal-body">
+      <!-- 客戶選擇 -->
       <div class="section-card">
         <h4>客戶資料</h4>
         <div class="form-row">
@@ -147,11 +172,34 @@
           </div>
         </div>
       </div>
+
+      <!-- 付款狀況（移到客戶資料下方） -->
+      <div class="section-card">
+        <h4>付款狀況</h4>
+        <div class="form-row">
+          <div class="form-group checkbox-group">
+            <label>定金</label>
+            <label class="toggle"><input type="checkbox" id="order-deposit"> <span>已付</span></label>
+          </div>
+          <div class="form-group checkbox-group">
+            <label>尾款</label>
+            <label class="toggle"><input type="checkbox" id="order-balance"> <span>已付</span></label>
+          </div>
+        </div>
+      </div>
+
+      <!-- 商品列表 -->
       <div class="section-card">
         <h4>商品明細</h4>
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <input type="text" id="order-item-search" placeholder="🔍 輸入貨號或品名搜尋商品..." oninput="filterOrderProductDropdown()" autocomplete="off" style="flex:1;">
+          <div id="order-product-dropdown" class="dropdown hidden" style="top:36px;"></div>
+        </div>
         <div id="order-items-container"></div>
-        <button class="btn outline" onclick="addOrderItem()">＋ 新增品項</button>
+        <button class="btn outline" onclick="addOrderItem()">＋ 瀏覽全部商品</button>
       </div>
+
+      <!-- 寄送 & 金額 -->
       <div class="section-card">
         <h4>費用計算</h4>
         <div class="form-row">
@@ -171,24 +219,20 @@
             <input type="number" id="order-discount" value="0" oninput="calcOrderTotal()">
           </div>
         </div>
-        <div class="total-row"><span>小計</span><span id="display-subtotal">NT$ 0</span></div>
-        <div class="total-row"><span>運費</span><span id="display-shipping">NT$ 0</span></div>
-        <div class="total-row"><span>優惠</span><span id="display-discount">NT$ 0</span></div>
-        <div class="total-row grand"><span>總額</span><span id="display-total">NT$ 0</span></div>
-      </div>
-      <div class="section-card">
-        <h4>付款狀況</h4>
-        <div class="form-row">
-          <div class="form-group checkbox-group">
-            <label>定金</label>
-            <label class="toggle"><input type="checkbox" id="order-deposit"> <span>已付</span></label>
-          </div>
-          <div class="form-group checkbox-group">
-            <label>尾款</label>
-            <label class="toggle"><input type="checkbox" id="order-balance"> <span>已付</span></label>
-          </div>
+        <div class="total-row">
+          <span>小計</span><span id="display-subtotal">NT$ 0</span>
+        </div>
+        <div class="total-row">
+          <span>運費</span><span id="display-shipping">NT$ 0</span>
+        </div>
+        <div class="total-row">
+          <span>優惠</span><span id="display-discount">NT$ 0</span>
+        </div>
+        <div class="total-row grand">
+          <span>總額</span><span id="display-total">NT$ 0</span>
         </div>
       </div>
+
     </div>
     <div class="modal-footer">
       <button class="btn outline" onclick="closeModal('order-modal-overlay')">取消</button>
@@ -199,9 +243,11 @@
   </div>
 </div>
 
-<!-- 客戶 Modal -->
+<!-- ============================================================
+     客戶 Modal
+     ============================================================ -->
 <div class="modal-overlay hidden" id="customer-modal-overlay">
-  <div class="modal">
+  <div class="modal" id="customer-modal">
     <div class="modal-header">
       <h3 id="customer-modal-title">新增客戶</h3>
       <button class="modal-close" onclick="closeModal('customer-modal-overlay')">✕</button>
@@ -229,9 +275,11 @@
   </div>
 </div>
 
-<!-- 商品 Modal -->
+<!-- ============================================================
+     商品 Modal
+     ============================================================ -->
 <div class="modal-overlay hidden" id="product-modal-overlay">
-  <div class="modal large">
+  <div class="modal large" id="product-modal">
     <div class="modal-header">
       <h3 id="product-modal-title">新增商品</h3>
       <button class="modal-close" onclick="closeModal('product-modal-overlay')">✕</button>
@@ -275,16 +323,19 @@
           <input type="number" id="prod-stock" placeholder="0" min="0">
         </div>
       </div>
+      <!-- 款式/顏色（每款含售價、成本、庫存） -->
       <div class="form-group">
-        <label>款式 / 顏色</label>
+        <label>款式 / 顏色（每款可單獨設定售價、成本、庫存）</label>
         <div id="prod-variants-container"></div>
         <button class="btn outline small" onclick="addVariantRow('prod-variants-container','variant')">＋ 新增款式</button>
       </div>
+      <!-- 尺寸 -->
       <div class="form-group">
         <label>尺寸</label>
         <div id="prod-sizes-container"></div>
         <button class="btn outline small" onclick="addVariantRow('prod-sizes-container','size')">＋ 新增尺寸</button>
       </div>
+      <!-- 圖片 -->
       <div class="form-group">
         <label>商品圖片（最多4張）</label>
         <div id="prod-images-container" class="images-upload-area"></div>
@@ -301,7 +352,7 @@
 
 <!-- 備註彈窗 -->
 <div class="modal-overlay hidden" id="note-modal-overlay">
-  <div class="modal small">
+  <div class="modal small" id="note-modal">
     <div class="modal-header">
       <h3>客戶備註</h3>
       <button class="modal-close" onclick="closeModal('note-modal-overlay')">✕</button>
@@ -315,6 +366,7 @@
   </div>
 </div>
 
+<!-- Toast 通知 -->
 <div id="toast" class="toast hidden"></div>
 
 </body>
