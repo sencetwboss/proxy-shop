@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>代購管理系統</title>
+<link rel="stylesheet" href="style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<script type="module" src="firebase-config.js"></script>
+<script type="module" src="auth.js"></script>
+<script type="module" src="app.js"></script>
+</head>
+<body>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">🛍️</div>
+    <h1>代購管理系統</h1>
+    <p class="login-sub">請登入以繼續</p>
+    <div class="form-group">
+      <label>帳號（Email）</label>
+      <input type="email" id="login-email" placeholder="your@email.com" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label>密碼</label>
+      <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+    <div id="login-error" class="error-msg hidden"></div>
+    <button class="btn primary full" id="login-btn" onclick="doLogin()">登入</button>
+  </div>
+</div>
+
+<div id="main-app" class="hidden">
+  <nav id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-logo">🛍️</span>
+      <span class="sidebar-title">代購管理</span>
+    </div>
+    <div class="nav-links">
+      <a class="nav-item active" onclick="switchPage('orders',this)"><span class="nav-icon">📋</span><span class="nav-label">訂單管理</span></a>
+      <a class="nav-item" onclick="switchPage('customers',this)"><span class="nav-icon">👥</span><span class="nav-label">客戶管理</span></a>
+      <a class="nav-item" onclick="switchPage('products',this)"><span class="nav-icon">📦</span><span class="nav-label">商品管理</span></a>
+      <a class="nav-item" onclick="switchPage('purchase',this)"><span class="nav-icon">🛒</span><span class="nav-label">採買清單</span></a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="user-info">
+        <span class="user-avatar" id="user-avatar">U</span>
+        <span class="user-email" id="user-email-display"></span>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">登出</button>
+    </div>
+  </nav>
+
+  <button class="hamburger" id="hamburger" onclick="toggleSidebar()">☰</button>
+  <div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <main id="main-content">
+    <div id="page-orders" class="page">
+      <div class="page-header">
+        <h2>訂單管理</h2>
+        <button class="btn primary" onclick="openOrderModal()">＋ 新增訂單</button>
+      </div>
+      <div class="filter-bar">
+        <input type="date" id="filter-date-from" onchange="renderOrders()">
+        <span>～</span>
+        <input type="date" id="filter-date-to" onchange="renderOrders()">
+        <select id="filter-order-status" onchange="renderOrders()">
+          <option value="">全部狀態</option>
+          <option>採買中</option><option>待匯款</option><option>待寄出</option><option>已寄出</option>
+        </select>
+        <input type="text" id="filter-order-search" placeholder="搜尋客戶/訂單編號" oninput="renderOrders()">
+      </div>
+      <div id="orders-list"></div>
+    </div>
+
+    <div id="page-customers" class="page hidden">
+      <div class="page-header">
+        <h2>客戶管理</h2>
+        <button class="btn primary" onclick="openCustomerModal()">＋ 新增客戶</button>
+      </div>
+      <div class="filter-bar">
+        <input type="text" id="filter-customer-search" placeholder="搜尋客戶名稱..." oninput="renderCustomers()">
+        <select id="filter-customer-platform" onchange="renderCustomers()">
+          <option value="">全部平台</option>
+          <option>Line@</option><option>賣貨便</option><option>IG</option><option>Threads</option>
+        </select>
+      </div>
+      <div id="customers-list"></div>
+    </div>
+
+    <div id="page-products" class="page hidden">
+      <div class="page-header">
+        <h2>商品管理</h2>
+        <button class="btn primary" onclick="openProductModal()">＋ 新增商品</button>
+      </div>
+      <div class="filter-bar">
+        <select id="filter-product-category" onchange="renderProducts()">
+          <option value="">全部分類</option>
+          <option value="服飾">服飾</option>
+          <option value="代購">代購</option>
+        </select>
+        <input type="text" id="filter-product-search" placeholder="搜尋商品名稱/貨號" oninput="renderProducts()">
+      </div>
+      <div id="products-list"></div>
+    </div>
+
+    <div id="page-purchase" class="page hidden">
+      <div class="page-header">
+        <h2>採買清單</h2>
+        <button class="btn primary" onclick="compilePurchaseList()">📊 統整</button>
+      </div>
+      <div id="purchase-list"></div>
+    </div>
+  </main>
+</div>
+
+<!-- 訂單 Modal -->
+<div class="modal-overlay hidden" id="order-modal-overlay">
+  <div class="modal large">
+    <div class="modal-header">
+      <h3 id="order-modal-title">新增訂單</h3>
+      <button class="modal-close" onclick="closeModal('order-modal-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-card">
+        <h4>客戶資料</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label>客戶 <span class="req">*</span></label>
+            <div class="search-select-wrap">
+              <input type="text" id="order-customer-search" placeholder="搜尋客戶..." oninput="filterCustomerDropdown()" autocomplete="off">
+              <div id="customer-dropdown" class="dropdown hidden"></div>
+              <input type="hidden" id="order-customer-id">
+            </div>
+            <div id="selected-customer-info" class="selected-info hidden"></div>
+          </div>
+          <div class="form-group">
+            <label>訂單日期</label>
+            <input type="date" id="order-date">
+          </div>
+          <div class="form-group">
+            <label>整筆訂單狀況</label>
+            <select id="order-status">
+              <option>採買中</option><option>待匯款</option><option>待寄出</option><option>已寄出</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="section-card">
+        <h4>商品明細</h4>
+        <div id="order-items-container"></div>
+        <button class="btn outline" onclick="addOrderItem()">＋ 新增品項</button>
+      </div>
+      <div class="section-card">
+        <h4>費用計算</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label>寄送方式</label>
+            <select id="order-shipping-method" onchange="calcOrderTotal()">
+              <option value="7-11">7-11 店到店</option>
+              <option value="宅配">宅配</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>運費 (自動)</label>
+            <input type="number" id="order-shipping-fee" readonly style="background:var(--bg-muted)">
+          </div>
+          <div class="form-group">
+            <label>優惠 (可為負數)</label>
+            <input type="number" id="order-discount" value="0" oninput="calcOrderTotal()">
+          </div>
+        </div>
+        <div class="total-row"><span>小計</span><span id="display-subtotal">NT$ 0</span></div>
+        <div class="total-row"><span>運費</span><span id="display-shipping">NT$ 0</span></div>
+        <div class="total-row"><span>優惠</span><span id="display-discount">NT$ 0</span></div>
+        <div class="total-row grand"><span>總額</span><span id="display-total">NT$ 0</span></div>
+      </div>
+      <div class="section-card">
+        <h4>付款狀況</h4>
+        <div class="form-row">
+          <div class="form-group checkbox-group">
+            <label>定金</label>
+            <label class="toggle"><input type="checkbox" id="order-deposit"> <span>已付</span></label>
+          </div>
+          <div class="form-group checkbox-group">
+            <label>尾款</label>
+            <label class="toggle"><input type="checkbox" id="order-balance"> <span>已付</span></label>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn outline" onclick="closeModal('order-modal-overlay')">取消</button>
+      <button class="btn primary" onclick="saveOrder()">💾 儲存訂單</button>
+      <button class="btn success hidden" id="btn-download-order" onclick="downloadOrderImage()">🖼️ 下載圖片</button>
+      <button class="btn success hidden" id="btn-download-pdf" onclick="downloadOrderPDF()">📄 下載PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- 客戶 Modal -->
+<div class="modal-overlay hidden" id="customer-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="customer-modal-title">新增客戶</h3>
+      <button class="modal-close" onclick="closeModal('customer-modal-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>客戶名稱（可加 emoji）<span class="req">*</span></label>
+        <input type="text" id="cust-name" placeholder="例：小美 🌸">
+      </div>
+      <div class="form-group">
+        <label>下單平台來源</label>
+        <select id="cust-platform">
+          <option>Line@</option><option>賣貨便</option><option>IG</option><option>Threads</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>備註</label>
+        <textarea id="cust-note" rows="3" placeholder="客戶備註..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn outline" onclick="closeModal('customer-modal-overlay')">取消</button>
+      <button class="btn primary" onclick="saveCustomer()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 商品 Modal -->
+<div class="modal-overlay hidden" id="product-modal-overlay">
+  <div class="modal large">
+    <div class="modal-header">
+      <h3 id="product-modal-title">新增商品</h3>
+      <button class="modal-close" onclick="closeModal('product-modal-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group">
+          <label>商品分類 <span class="req">*</span></label>
+          <select id="prod-category" onchange="onCategoryChange()">
+            <option value="">請選擇...</option>
+            <option value="服飾">服飾</option>
+            <option value="代購">代購</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>貨號（自動產生）</label>
+          <input type="text" id="prod-sku" readonly style="background:var(--bg-muted);color:var(--accent)">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>廠商（購買處）</label>
+          <input type="text" id="prod-vendor" placeholder="廠商名稱">
+        </div>
+        <div class="form-group">
+          <label>品名</label>
+          <input type="text" id="prod-name" placeholder="商品名稱">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>售價</label>
+          <input type="number" id="prod-price" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>成本</label>
+          <input type="number" id="prod-cost" placeholder="0" min="0">
+        </div>
+        <div class="form-group">
+          <label>庫存數量</label>
+          <input type="number" id="prod-stock" placeholder="0" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>款式 / 顏色</label>
+        <div id="prod-variants-container"></div>
+        <button class="btn outline small" onclick="addVariantRow('prod-variants-container','variant')">＋ 新增款式</button>
+      </div>
+      <div class="form-group">
+        <label>尺寸</label>
+        <div id="prod-sizes-container"></div>
+        <button class="btn outline small" onclick="addVariantRow('prod-sizes-container','size')">＋ 新增尺寸</button>
+      </div>
+      <div class="form-group">
+        <label>商品圖片（最多4張）</label>
+        <div id="prod-images-container" class="images-upload-area"></div>
+        <input type="file" id="prod-image-input" accept="image/*" multiple style="display:none" onchange="handleProductImages(event)">
+        <button class="btn outline small" onclick="document.getElementById('prod-image-input').click()">📷 選擇圖片</button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn outline" onclick="closeModal('product-modal-overlay')">取消</button>
+      <button class="btn primary" onclick="saveProduct()">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 備註彈窗 -->
+<div class="modal-overlay hidden" id="note-modal-overlay">
+  <div class="modal small">
+    <div class="modal-header">
+      <h3>客戶備註</h3>
+      <button class="modal-close" onclick="closeModal('note-modal-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="note-modal-content" style="white-space:pre-wrap;line-height:1.8"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" onclick="closeModal('note-modal-overlay')">關閉</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+</body>
+</html>
