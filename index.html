@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>代購管理系統</title>
+<title>SENCE.TW 訂單管理</title>
 <link rel="stylesheet" href="style.css">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
@@ -16,8 +16,8 @@
 <!-- 登入畫面 -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo">🛍️</div>
-    <h1>代購管理系統</h1>
+    <div class="login-logo" style="font-size:22px;font-weight:700;letter-spacing:1px;color:var(--accent);">SENCE.TW</div>
+    <h1>訂單管理系統</h1>
     <p class="login-sub">請登入以繼續</p>
     <div class="form-group">
       <label>帳號（Email）</label>
@@ -36,8 +36,8 @@
 <div id="main-app" class="hidden">
   <nav id="sidebar">
     <div class="sidebar-header">
-      <span class="sidebar-logo">🛍️</span>
-      <span class="sidebar-title">代購管理</span>
+      <span class="sidebar-logo" style="font-size:13px;font-weight:700;letter-spacing:1px;color:var(--accent);">SENCE.TW</span>
+      <span class="sidebar-title">訂單管理</span>
     </div>
     <div class="nav-links">
       <a class="nav-item active" data-page="customers" onclick="switchPage('customers',this)">
@@ -66,7 +66,6 @@
   <div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
   <main id="main-content">
-
     <!-- 訂單管理 -->
     <div id="page-orders" class="page hidden">
       <div class="page-header">
@@ -127,7 +126,6 @@
       </div>
       <div id="purchase-list"></div>
     </div>
-
   </main>
 </div>
 
@@ -139,7 +137,6 @@
       <button class="modal-close" onclick="closeModal('order-modal-overlay')">✕</button>
     </div>
     <div class="modal-body">
-      <!-- 客戶資料 -->
       <div class="section-card">
         <h4>客戶資料</h4>
         <div class="form-row">
@@ -165,7 +162,6 @@
         </div>
       </div>
 
-      <!-- 付款狀況 -->
       <div class="section-card">
         <h4>付款狀況</h4>
         <div class="form-row">
@@ -180,7 +176,6 @@
         </div>
       </div>
 
-      <!-- 商品明細 -->
       <div class="section-card">
         <h4>商品明細</h4>
         <div style="position:relative;margin-bottom:10px;">
@@ -188,10 +183,13 @@
           <div id="order-product-dropdown" class="dropdown hidden"></div>
         </div>
         <div id="order-items-container"></div>
-        <button class="btn outline" onclick="addOrderItem()">＋ 瀏覽全部商品</button>
+        <!-- 修正6：分類瀏覽按鈕 -->
+        <div style="display:flex;gap:8px;margin-top:8px;">
+          <button class="btn outline small" onclick="addOrderItemByCategory('服飾')">＋ 服飾</button>
+          <button class="btn outline small" onclick="addOrderItemByCategory('代購')">＋ 代購</button>
+        </div>
       </div>
 
-      <!-- 費用計算 -->
       <div class="section-card">
         <h4>費用計算</h4>
         <div class="form-row">
@@ -222,8 +220,9 @@
               <input type="number" id="order-credit" value="0" min="0" oninput="calcOrderTotal()" style="flex:1;">
             </div>
           </div>
+          <!-- 修正3：訂金→定金 -->
           <div class="form-group">
-            <label>訂金</label>
+            <label>定金</label>
             <div style="display:flex;align-items:center;gap:4px;">
               <span style="color:var(--danger);font-weight:700;">−</span>
               <input type="number" id="order-prepaid" value="0" min="0" oninput="calcOrderTotal()" style="flex:1;">
@@ -307,13 +306,11 @@
           <input type="text" id="prod-name" placeholder="商品名稱">
         </div>
       </div>
+      <!-- 修正7：款式→顏色→尺寸 階層設計 -->
       <div class="form-group">
-        <label>款式 / 顏色 / 尺寸（每款獨立設定售價、成本、庫存）</label>
-        <div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr 28px;gap:6px;margin-bottom:4px;font-size:11px;color:var(--text-muted);font-weight:600;padding:0 2px;">
-          <span>款式/顏色</span><span>尺寸</span><span>售價</span><span>成本</span><span>庫存</span><span></span>
-        </div>
-        <div id="prod-variants-container"></div>
-        <button class="btn outline small" onclick="addVariantRow()">＋ 新增款式</button>
+        <label>款式 / 顏色 → 尺寸（先設定顏色，再為每個顏色新增尺寸）</label>
+        <div id="prod-colors-container"></div>
+        <button class="btn outline small" onclick="addColorGroup()">＋ 新增顏色/款式</button>
       </div>
       <div class="form-group">
         <label>商品圖片（最多4張）</label>
@@ -341,6 +338,24 @@
     </div>
     <div class="modal-footer">
       <button class="btn primary" onclick="closeModal('note-modal-overlay')">關閉</button>
+    </div>
+  </div>
+</div>
+
+<!-- 庫存更新 Modal（修正9）-->
+<div class="modal-overlay hidden" id="stock-modal-overlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h3 id="stock-modal-title">庫存更新</h3>
+      <button class="modal-close" onclick="closeModal('stock-modal-overlay')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">調整各款式庫存數量後按「確認更新」</p>
+      <div id="stock-update-container"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn outline" onclick="closeModal('stock-modal-overlay')">取消</button>
+      <button class="btn primary" onclick="confirmStockUpdate()">✅ 確認更新</button>
     </div>
   </div>
 </div>
