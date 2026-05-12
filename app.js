@@ -10,12 +10,9 @@ let customers = [], products = [], orders = [];
 let editingCustomerId = null, editingProductId = null, editingOrderId = null;
 let tempProductImages = [], currentOrderItems = [];
 let autoSaveTimer = null;
-let stockUpdateProductId = null; // 修正9
 
 window.onAppReady = function() {
   listenCustomers(); listenProducts(); listenOrders();
-  const el = document.getElementById('order-date');
-  if (el) el.value = new Date().toISOString().slice(0,10);
   scheduleAutoAllot();
   switchPage('customers', document.querySelector('.nav-item'));
 };
@@ -44,6 +41,19 @@ window.toggleSidebar = function() {
 };
 window.closeModal = function(id) { document.getElementById(id).classList.add('hidden'); };
 function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+
+// 修正1：各自獨立的關閉函數，確保每個 modal 都能正確關閉
+window.closeCustomerModal = function() {
+  document.getElementById('customer-modal-overlay').classList.add('hidden');
+};
+window.closeProductModal = function() {
+  document.getElementById('product-modal-overlay').classList.add('hidden');
+};
+window.closeOrderModal = function() {
+  document.getElementById('order-modal-overlay').classList.add('hidden');
+  clearTimeout(autoSaveTimer);
+};
+
 function showToast(msg, ms=2500) {
   const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('hidden');
   setTimeout(()=>t.classList.add('hidden'),ms);
@@ -81,6 +91,7 @@ window.renderCustomers = function() {
         </div>
       </div>`).join('');
 };
+
 window.openCustomerModal = function(id=null) {
   editingCustomerId=id;
   const c=id?customers.find(x=>x.id===id):null;
@@ -88,16 +99,31 @@ window.openCustomerModal = function(id=null) {
   document.getElementById('cust-name').value=c?c.name:'';
   document.getElementById('cust-platform').value=c?(c.platform||'Line@'):'Line@';
   document.getElementById('cust-note').value=c?(c.note||''):'';
+  // 修正1：重新啟用按鈕
+  const btn=document.getElementById('save-customer-btn');
+  if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
   openModal('customer-modal-overlay');
 };
+
 window.saveCustomer = async function() {
+  const btn=document.getElementById('save-customer-btn');
+  if(btn&&btn.disabled) return;
   const name=document.getElementById('cust-name').value.trim();
   if(!name){showToast('⚠️ 請輸入客戶名稱');return;}
-  const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
-  if(editingCustomerId){await updateDoc(doc(db,'customers',editingCustomerId),data);showToast('✅ 客戶已更新');}
-  else{data.createdAt=Date.now();await addDoc(collection(db,'customers'),data);showToast('✅ 客戶已新增');}
-  closeModal('customer-modal-overlay'); // 修正1
+  // 修正1：立刻停用按鈕防止重複點擊
+  if(btn){btn.disabled=true;btn.textContent='儲存中...';}
+  try {
+    const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
+    if(editingCustomerId){await updateDoc(doc(db,'customers',editingCustomerId),data);}
+    else{data.createdAt=Date.now();await addDoc(collection(db,'customers'),data);}
+    showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
+    closeCustomerModal(); // 修正1
+  } catch(e) {
+    showToast('❌ 儲存失敗，請重試');
+    if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
+  }
 };
+
 window.deleteCustomer = async function(id) {
   if(!confirm('確定刪除此客戶？')) return;
   await deleteDoc(doc(db,'customers',id)); showToast('🗑️ 已刪除');
@@ -132,7 +158,6 @@ window.renderProducts = function() {
 
 function productCardHtml(p) {
   const imgs=(p.images||[]).slice(0,4).map(url=>`<img src="${url}" alt="" onclick="window.open('${url}','_blank')">`).join('');
-  // 修正7：展示顏色→尺寸階層
   const variantRows=(p.variants||[]).map(v=>`
     <tr>
       <td style="padding:3px 6px;">${esc(v.color||v.name||'')}</td>
@@ -142,6 +167,7 @@ function productCardHtml(p) {
       <td style="padding:3px 6px;text-align:right;${(v.stock||0)<=3?'color:var(--danger);font-weight:700;':''}">${v.stock??0}</td>
     </tr>`).join('');
   const totalStock=(p.variants||[]).reduce((s,v)=>s+(v.stock||0),0);
+  // 修正5：移除各品項的庫存更新按鈕
   return `
     <div class="card product-card">
       <div class="card-header">
@@ -166,7 +192,6 @@ function productCardHtml(p) {
         `:'<div style="font-size:12px;color:var(--text-muted);">尚未設定款式</div>'}
         <div class="product-actions">
           <button class="btn outline small" onclick="openProductModal('${p.id}')">✏️ 編輯</button>
-          <button class="btn primary small" onclick="openStockModal('${p.id}')">📦 庫存更新</button>
           <button class="btn danger small" onclick="deleteProduct('${p.id}')">🗑️</button>
         </div>
       </div>
@@ -175,53 +200,54 @@ function productCardHtml(p) {
 
 window.onCategoryChange = function() { if(!editingProductId) genSKU(); };
 
-// 修正2：貨號不可重複（含刪除紀錄）
 async function genSKU() {
   const cat=document.getElementById('prod-category').value;
   if(!cat){document.getElementById('prod-sku').value='';return;}
   const prefix=cat==='服飾'?'A':'N';
-  // 收集所有已用的編號
   const usedNums=new Set();
   products.filter(p=>p.category===cat).forEach(p=>{
-    const n=parseInt((p.sku||'').slice(1));
-    if(!isNaN(n)) usedNums.add(n);
+    const n=parseInt((p.sku||'').slice(1)); if(!isNaN(n)) usedNums.add(n);
   });
-  // 收集已刪除的編號（也要跳過）
   try{
     const snap=await getDoc(doc(db,'meta','deletedSKUs'));
     if(snap.exists())(snap.data()[prefix]||[]).forEach(sku=>{
-      const n=parseInt(sku.slice(1));
-      if(!isNaN(n)) usedNums.add(n);
+      const n=parseInt(sku.slice(1)); if(!isNaN(n)) usedNums.add(n);
     });
   }catch(e){}
-  // 找下一個未用的號碼（從1開始）
-  let next=1;
-  while(usedNums.has(next)) next++;
+  let next=1; while(usedNums.has(next)) next++;
   document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
 }
 
-// 修正7：顏色群組UI（顏色→尺寸階層）
+// 修正2：新增顏色群組時，自動帶入上一個群組的售價/成本
 window.addColorGroup = function(colorData={}) {
   const container=document.getElementById('prod-colors-container');
+  // 修正2：取得上一個群組的售價和成本
+  let lastPrice='', lastCost='';
+  const existingGroups=container.querySelectorAll(':scope > div');
+  if(existingGroups.length>0&&!colorData.price&&!colorData.cost){
+    const lastGroup=existingGroups[existingGroups.length-1];
+    lastPrice=lastGroup.querySelector('.color-price-input')?.value||'';
+    lastCost=lastGroup.querySelector('.color-cost-input')?.value||'';
+  }
   const groupId='cg-'+Date.now()+Math.random().toString(36).slice(2,5);
   const div=document.createElement('div');
   div.id=groupId;
   div.style.cssText='border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-muted);';
   div.innerHTML=`
-    <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">
-      <div style="flex:1;">
-        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">顏色/款式名稱</div>
+    <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="flex:2;min-width:100px;">
+        <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">顏色/款式名稱 <span style="color:var(--danger)">*</span></div>
         <input type="text" placeholder="例：黑色、白色、格紋..." value="${esc(colorData.color||colorData.name||'')}" class="color-name-input" style="width:100%;">
       </div>
       <div style="width:90px;">
         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">售價</div>
-        <input type="number" placeholder="售價" min="0" value="${colorData.price??''}" class="color-price-input" style="width:100%;">
+        <input type="number" placeholder="售價" min="0" value="${colorData.price??lastPrice}" class="color-price-input" style="width:100%;">
       </div>
       <div style="width:80px;">
         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">成本</div>
-        <input type="number" placeholder="成本" min="0" value="${colorData.cost??''}" class="color-cost-input" style="width:100%;">
+        <input type="number" placeholder="成本" min="0" value="${colorData.cost??lastCost}" class="color-cost-input" style="width:100%;">
       </div>
-      <button class="btn danger small" style="margin-top:16px;" onclick="document.getElementById('${groupId}').remove()">✕ 刪除</button>
+      <button class="btn danger small" onclick="document.getElementById('${groupId}').remove()">✕ 刪除</button>
     </div>
     <div style="margin-left:8px;">
       <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">尺寸（可多個）：</div>
@@ -229,7 +255,6 @@ window.addColorGroup = function(colorData={}) {
       <button class="btn outline small" onclick="addSizeRow('${groupId}')">＋ 新增尺寸</button>
     </div>`;
   container.appendChild(div);
-  // 載入已有尺寸
   (colorData.sizes||[{size:'',stock:0}]).forEach(s=>addSizeRow(groupId,s));
 };
 
@@ -239,7 +264,7 @@ window.addSizeRow = function(groupId, sizeData={}) {
   const row=document.createElement('div');
   row.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:5px;';
   row.innerHTML=`
-    <input type="text" placeholder="尺寸（如：S、M、L、XL 或 free）" value="${esc(sizeData.size||'')}" style="flex:2;" class="size-name">
+    <input type="text" placeholder="尺寸（S、M、L、XL、free...）" value="${esc(sizeData.size||'')}" style="flex:2;" class="size-name">
     <input type="number" placeholder="庫存" min="0" value="${sizeData.stock??0}" style="width:70px;" class="size-stock">
     <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`;
   container.appendChild(row);
@@ -270,11 +295,8 @@ window.openProductModal = async function(id=null) {
   document.getElementById('prod-sku').value=p?(p.sku||''):'';
   document.getElementById('prod-vendor').value=p?(p.vendor||''):'';
   document.getElementById('prod-name').value=p?(p.name||''):'';
-  // 清空顏色群組
   document.getElementById('prod-colors-container').innerHTML='';
-  // 修正7：重建顏色→尺寸結構
   if(p?.variants?.length){
-    // 將舊的 flat variants 重組為顏色群組
     const colorMap={};
     p.variants.forEach(v=>{
       const colorKey=v.color||v.name||'';
@@ -285,62 +307,62 @@ window.openProductModal = async function(id=null) {
   }
   if(p?.images?.length) p.images.forEach(url=>tempProductImages.push({file:null,url,existing:true,storedUrl:url}));
   renderProductImagePreviews();
+  // 修正1：重新啟用按鈕
+  const btn=document.getElementById('save-product-btn');
+  if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
   openModal('product-modal-overlay');
 };
 
 window.saveProduct = async function() {
+  const btn=document.getElementById('save-product-btn');
+  if(btn&&btn.disabled) return;
   const category=document.getElementById('prod-category').value;
   if(!category){showToast('⚠️ 請選擇商品分類');return;}
   const sku=document.getElementById('prod-sku').value;
   if(!sku){showToast('⚠️ 請先選擇分類產生貨號');return;}
-
-  // 修正2：新增時檢查貨號是否已被使用
   if(!editingProductId){
     const exists=products.find(p=>p.sku===sku);
     if(exists){showToast('⚠️ 貨號已存在，請重新選擇分類');await genSKU();return;}
   }
-
-  const imageUrls=[];
-  for(const img of tempProductImages){
-    if(img.existing){imageUrls.push(img.storedUrl);}
-    else{
-      try{
-        const r=ref(storage,`products/${sku}_${Date.now()}_${img.file.name}`);
-        await uploadBytes(r,img.file);
-        imageUrls.push(await getDownloadURL(r));
-      }catch(e){showToast('⚠️ 圖片上傳失敗，跳過');}
-    }
-  }
-
-  // 修正7：讀取顏色群組，展開為 flat variants
-  const variants=[];
-  document.querySelectorAll('#prod-colors-container > div').forEach(group=>{
-    const colorName=group.querySelector('.color-name-input')?.value.trim()||'';
-    const price=group.querySelector('.color-price-input')?.value;
-    const cost=group.querySelector('.color-cost-input')?.value;
-    group.querySelectorAll('.sizes-container-'+group.id+' > div').forEach(sizeRow=>{
-      const size=sizeRow.querySelector('.size-name')?.value.trim()||'';
-      const stock=Number(sizeRow.querySelector('.size-stock')?.value||0);
-      if(colorName||size){
-        variants.push({
-          color:colorName, name:colorName, // 保留兩個欄位相容
-          size,
-          price:price!==''&&price!=null?Number(price):null,
-          cost:cost!==''&&cost!=null?Number(cost):null,
-          stock
-        });
+  // 修正1：立刻停用按鈕
+  if(btn){btn.disabled=true;btn.textContent='儲存中...';}
+  try {
+    const imageUrls=[];
+    for(const img of tempProductImages){
+      if(img.existing){imageUrls.push(img.storedUrl);}
+      else{
+        try{
+          const r=ref(storage,`products/${sku}_${Date.now()}_${img.file.name}`);
+          await uploadBytes(r,img.file);
+          imageUrls.push(await getDownloadURL(r));
+        }catch(e){showToast('⚠️ 圖片上傳失敗，跳過');}
       }
+    }
+    const variants=[];
+    document.querySelectorAll('#prod-colors-container > div').forEach(group=>{
+      const colorName=group.querySelector('.color-name-input')?.value.trim()||'';
+      const price=group.querySelector('.color-price-input')?.value;
+      const cost=group.querySelector('.color-cost-input')?.value;
+      group.querySelectorAll('.sizes-container-'+group.id+' > div').forEach(sizeRow=>{
+        const size=sizeRow.querySelector('.size-name')?.value.trim()||'';
+        const stock=Number(sizeRow.querySelector('.size-stock')?.value||0);
+        if(colorName||size){
+          variants.push({color:colorName,name:colorName,size,price:price!==''&&price!=null?Number(price):null,cost:cost!==''&&cost!=null?Number(cost):null,stock});
+        }
+      });
     });
-  });
-
-  const data={category,sku,vendor:document.getElementById('prod-vendor').value.trim(),name:document.getElementById('prod-name').value.trim(),variants,images:imageUrls,updatedAt:Date.now()};
-  if(editingProductId){await updateDoc(doc(db,'products',editingProductId),data);showToast('✅ 商品已更新');}
-  else{data.createdAt=Date.now();await addDoc(collection(db,'products'),data);showToast('✅ 商品已新增');}
-  closeModal('product-modal-overlay'); // 修正1
+    const data={category,sku,vendor:document.getElementById('prod-vendor').value.trim(),name:document.getElementById('prod-name').value.trim(),variants,images:imageUrls,updatedAt:Date.now()};
+    if(editingProductId){await updateDoc(doc(db,'products',editingProductId),data);showToast('✅ 商品已更新');}
+    else{data.createdAt=Date.now();await addDoc(collection(db,'products'),data);showToast('✅ 商品已新增');}
+    closeProductModal(); // 修正1
+  } catch(e) {
+    showToast('❌ 儲存失敗，請重試');
+    if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
+  }
 };
 
 window.deleteProduct = async function(id) {
-  if(!confirm('確定刪除此商品？刪除後貨號不可再使用。')) return;
+  if(!confirm('確定刪除此商品？')) return;
   const p=products.find(x=>x.id===id); if(!p) return;
   if(p.sku){
     const prefix=p.sku[0];
@@ -352,35 +374,62 @@ window.deleteProduct = async function(id) {
   await deleteDoc(doc(db,'products',id)); showToast('🗑️ 商品已刪除');
 };
 
-// 修正9：庫存更新 Modal
-window.openStockModal = function(productId) {
-  stockUpdateProductId=productId;
-  const p=products.find(x=>x.id===productId); if(!p) return;
-  document.getElementById('stock-modal-title').textContent=`庫存更新 — ${p.name||p.sku}`;
-  const container=document.getElementById('stock-update-container');
-  container.innerHTML=(p.variants||[]).map((v,i)=>`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:8px;background:var(--bg-muted);border-radius:6px;">
-      <div style="flex:1;font-size:13px;">
-        <strong>${esc(v.color||v.name||'')}</strong>${v.size?` / ${esc(v.size)}`:''}
-      </div>
-      <div style="display:flex;align-items:center;gap:6px;">
-        <span style="font-size:12px;color:var(--text-muted);">現有庫存：${v.stock??0}</span>
-        <span style="font-size:12px;color:var(--text-muted);">→</span>
-        <input type="number" min="0" value="${v.stock??0}" style="width:70px;" id="stock-input-${i}" placeholder="新庫存">
-      </div>
-    </div>`).join('')||'<p style="color:var(--text-muted);">此商品尚未設定款式</p>';
-  openModal('stock-modal-overlay');
+// 修正5+6：統一入庫更新
+window.openBatchStockModal = function() {
+  renderBatchStockList();
+  openModal('batch-stock-modal-overlay');
 };
 
-window.confirmStockUpdate = async function() {
-  const p=products.find(x=>x.id===stockUpdateProductId); if(!p) return;
-  const newVariants=p.variants.map((v,i)=>{
-    const input=document.getElementById(`stock-input-${i}`);
-    return{...v,stock:input?Number(input.value):(v.stock??0)};
+window.renderBatchStockList = function() {
+  const cat=document.getElementById('batch-stock-cat')?.value||'';
+  const search=(document.getElementById('batch-stock-search')?.value||'').toLowerCase();
+  const list=[...products].sort((a,b)=>{
+    const na=parseInt((a.sku||'').slice(1))||0;
+    const nb=parseInt((b.sku||'').slice(1))||0;
+    return na-nb;
+  }).filter(p=>{
+    if(cat&&p.category!==cat) return false;
+    if(search&&!p.name?.toLowerCase().includes(search)&&!p.sku?.toLowerCase().includes(search)) return false;
+    return true;
   });
-  await updateDoc(doc(db,'products',stockUpdateProductId),{variants:newVariants,updatedAt:Date.now()});
-  showToast('✅ 庫存已更新');
-  closeModal('stock-modal-overlay');
+  const container=document.getElementById('batch-stock-container');
+  container.innerHTML=list.map(p=>`
+    <div style="border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;">
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px;">
+        <span style="color:var(--accent);margin-right:8px;">${esc(p.sku||'')}</span>${esc(p.name||'')}
+        <span style="font-size:11px;color:var(--text-muted);margin-left:6px;">${esc(p.category||'')}</span>
+      </div>
+      ${(p.variants||[]).map((v,i)=>`
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;padding:6px 8px;background:var(--bg-muted);border-radius:6px;">
+          <div style="flex:1;font-size:13px;">${esc(v.color||v.name||'')}${v.size?' / '+esc(v.size):''}</div>
+          <div style="font-size:12px;color:var(--text-muted);white-space:nowrap;">現有：${v.stock??0} 件</div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:12px;color:var(--text-muted);">入庫＋</span>
+            <input type="number" min="0" value="0" style="width:65px;" id="batch-${p.id}-${i}" placeholder="0">
+          </div>
+        </div>`).join('')}
+      ${!p.variants?.length?'<div style="font-size:12px;color:var(--text-muted);">尚未設定款式</div>':''}
+    </div>`).join('')||'<p style="color:var(--text-muted);text-align:center;padding:20px;">沒有符合的商品</p>';
+};
+
+window.confirmBatchStock = async function() {
+  let updated=0;
+  for(const p of products){
+    if(!p.variants?.length) continue;
+    let changed=false;
+    const newVariants=p.variants.map((v,i)=>{
+      const input=document.getElementById(`batch-${p.id}-${i}`);
+      const add=input?Number(input.value)||0:0;
+      if(add>0){changed=true;return{...v,stock:(v.stock||0)+add};}
+      return v;
+    });
+    if(changed){
+      await updateDoc(doc(db,'products',p.id),{variants:newVariants,updatedAt:Date.now()});
+      updated++;
+    }
+  }
+  showToast(`✅ 已更新 ${updated} 個商品庫存`);
+  closeModal('batch-stock-modal-overlay');
 };
 
 // ===== ORDERS =====
@@ -407,7 +456,7 @@ window.renderOrders = function() {
 
 function orderCardHtml(o) {
   const cust=customers.find(c=>c.id===o.customerId);
-  const itemSummary=(o.items||[]).map(i=>`${esc(i.productName||'')} ${i.color?`[${esc(i.color)}]`:i.variant?`[${esc(i.variant)}]`:''} ${i.size?`/ ${esc(i.size)}`:''} × ${i.qty}${i.allotted?` (配${i.allotted})`:''} — <span class="badge ${i.goodsStatus||'採買中'}">${i.goodsStatus||'採買中'}</span>`).join('<br>');
+  const itemSummary=(o.items||[]).map(i=>`${esc(i.productName||'')} ${(i.color||i.variant)?`[${esc(i.color||i.variant)}]`:''} ${i.size?`/ ${esc(i.size)}`:''} × ${i.qty}${i.allotted?` (配${i.allotted})`:''} — <span class="badge ${i.goodsStatus||'採買中'}">${i.goodsStatus||'採買中'}</span>`).join('<br>');
   const total=calcTotal(o);
   return `
     <div class="card order-card" onclick="openOrderModal('${o.id}')">
@@ -452,8 +501,8 @@ window.openOrderModal = async function(id=null) {
   document.getElementById('order-modal-title').textContent=id?'編輯訂單':'新增訂單';
   document.getElementById('order-customer-search').value='';
   document.getElementById('order-customer-id').value=o?.customerId||'';
-  const cust=o?customers.find(c=>c.id===o.customerId):null;
   const selInfo=document.getElementById('selected-customer-info');
+  const cust=o?customers.find(c=>c.id===o.customerId):null;
   if(cust){
     document.getElementById('order-customer-search').value=cust.name;
     selInfo.textContent=`${cust.name}（${cust.platform||''}）`;
@@ -475,7 +524,12 @@ window.openOrderModal = async function(id=null) {
   document.getElementById('btn-download-pdf').classList.toggle('hidden',!id);
   const si=document.getElementById('order-item-search'); if(si) si.value='';
   document.getElementById('order-product-dropdown')?.classList.add('hidden');
+  // 修正3：每次打開都捲到最上方
   openModal('order-modal-overlay');
+  setTimeout(()=>{
+    const body=document.getElementById('order-modal-body');
+    if(body) body.scrollTop=0;
+  },50);
 };
 
 window.filterOrderProductDropdown = function() {
@@ -504,7 +558,6 @@ function addProductToOrder(productId) {
   renderOrderItemsUI(); calcOrderTotal();
 }
 
-// 修正6：分類瀏覽
 window.addOrderItemByCategory = function(category) {
   const catProducts=products.filter(p=>p.category===category).sort((a,b)=>{
     const na=parseInt((a.sku||'').slice(1))||0;
@@ -517,25 +570,21 @@ window.addOrderItemByCategory = function(category) {
   const div=document.createElement('div');
   div.style.cssText='display:flex;gap:8px;align-items:center;margin-bottom:10px;';
   const opts=catProducts.map(p=>`<option value="${p.id}">[${p.sku||''}] ${p.name||'（未命名）'}</option>`).join('');
-  div.innerHTML=`
-    <select id="${pickerId}" style="flex:1"><option value="">選擇${category}商品...</option>${opts}</select>
+  div.innerHTML=`<select id="${pickerId}" style="flex:1"><option value="">選擇${category}商品...</option>${opts}</select>
     <button class="btn primary small" onclick="confirmPickProduct('${pickerId}',this.parentElement)">確認</button>
     <button class="btn outline small" onclick="this.parentElement.remove()">✕</button>`;
   container.appendChild(div);
 };
-
 window.confirmPickProduct = function(pickerId, row) {
   const sel=document.getElementById(pickerId);
   const productId=sel.value; if(!productId){showToast('⚠️ 請選擇商品');return;}
-  addProductToOrder(productId);
-  row.remove();
+  addProductToOrder(productId); row.remove();
 };
 
 function renderOrderItemsUI() {
   const container=document.getElementById('order-items-container');
   container.innerHTML=currentOrderItems.map((item,idx)=>{
     const p=products.find(x=>x.id===item.productId);
-    // 修正7：從variants取顏色和尺寸選項
     const variants=p?.variants||[];
     const colors=[...new Set(variants.map(v=>v.color||v.name||'').filter(Boolean))];
     const selectedColor=item.color||item.variant||'';
@@ -574,7 +623,7 @@ function renderOrderItemsUI() {
           </div>
           <div style="width:52px;">
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">配貨量</div>
-            <input type="number" min="0" max="${item.qty||1}" value="${item.allotted||0}" style="width:100%;font-size:13px;padding:6px 4px;background:var(--accent-light);border-color:var(--accent);" oninput="onAllottedChange(${idx},this.value)">
+            <input type="number" min="0" value="${item.allotted||0}" style="width:100%;font-size:13px;padding:6px 4px;background:var(--accent-light);border-color:var(--accent);" oninput="onAllottedChange(${idx},this.value)">
           </div>
           <div style="width:75px;">
             <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">單價</div>
@@ -597,29 +646,40 @@ function renderOrderItemsUI() {
   }).join('');
 }
 
-// 修正7：選顏色後更新尺寸選項
 window.onColorChange = function(idx, colorValue) {
   currentOrderItems[idx].color=colorValue;
   currentOrderItems[idx].variant=colorValue;
-  currentOrderItems[idx].size=''; // 重置尺寸
-  // 更新售價
+  currentOrderItems[idx].size='';
   const p=products.find(x=>x.id===currentOrderItems[idx].productId);
   const v=p?.variants?.find(x=>(x.color||x.name||'')===colorValue);
   if(v?.price!=null) currentOrderItems[idx].priceSnapshot=v.price;
-  renderOrderItemsUI(); calcOrderTotal();
-  triggerAutoSave();
+  renderOrderItemsUI(); calcOrderTotal(); triggerAutoSave();
 };
 
-// 修正8：配貨量變更 → 更新庫存
-window.onAllottedChange = function(idx, value) {
+// 修正4：配貨量變更時同步扣減商品庫存
+window.onAllottedChange = async function(idx, value) {
   const newAllotted=Number(value)||0;
   const item=currentOrderItems[idx];
-  const oldAllotted=item.allotted||0;
+  const oldAllotted=Number(item.allotted||0);
+  const diff=newAllotted-oldAllotted; // 新增配貨量
   currentOrderItems[idx].allotted=newAllotted;
   // 自動更新貨品狀況
   const qty=item.qty||1;
-  if(newAllotted>=qty) currentOrderItems[idx].goodsStatus='已配貨';
-  else currentOrderItems[idx].goodsStatus='採買中';
+  currentOrderItems[idx].goodsStatus=newAllotted>=qty?'已配貨':'採買中';
+
+  // 修正4：同步扣減/歸還庫存
+  if(diff!==0&&editingOrderId){
+    const p=products.find(x=>x.id===item.productId);
+    if(p?.variants?.length){
+      const colorKey=item.color||item.variant||'';
+      const vIdx=p.variants.findIndex(v=>(v.color||v.name||'')===colorKey&&(v.size||'')===(item.size||''));
+      if(vIdx>=0){
+        const nv=[...p.variants];
+        nv[vIdx]={...nv[vIdx],stock:Math.max(0,(nv[vIdx].stock||0)-diff)};
+        await updateDoc(doc(db,'products',p.id),{variants:nv});
+      }
+    }
+  }
   renderOrderItemsUI(); triggerAutoSave();
 };
 
@@ -674,8 +734,7 @@ window.selectOrderCustomer = function(id,name,platform,note) {
 
 async function doSaveOrder(silent=false) {
   const customerId=document.getElementById('order-customer-id').value;
-  if(!customerId) return;
-  if(!currentOrderItems.length) return;
+  if(!customerId||!currentOrderItems.length) return;
   const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
   const method=document.getElementById('order-shipping-method').value;
   const shippingFee=method==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
@@ -710,7 +769,7 @@ window.saveOrder = async function() {
   if(!customerId){showToast('⚠️ 請選擇客戶');return;}
   if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
   await doSaveOrder(false);
-  closeModal('order-modal-overlay'); // 修正1
+  closeOrderModal(); // 修正1
 };
 window.deleteOrder = async function(id) {
   if(!confirm('確定刪除此訂單？')) return;
@@ -802,15 +861,14 @@ window.downloadOrderPDF = async function(orderId) {
   showToast('✅ PDF已下載');
 };
 
-// ===== PURCHASE LIST（修正8）=====
+// ===== PURCHASE LIST =====
 window.compilePurchaseList = function() {
   const map={};
   orders.forEach(o=>{
     (o.items||[]).forEach(item=>{
-      // 修正8：採買中 或 部分配貨（allotted < qty）都要算
-      const isPartial=(item.allotted||0)<(item.qty||1)&&(item.goodsStatus||'採買中')!=='缺貨'&&(item.goodsStatus||'採買中')!=='官網訂購中';
-      if(!isPartial&&(item.goodsStatus||'採買中')==='已配貨') return;
-      if((item.goodsStatus||'採買中')==='缺貨'||(item.goodsStatus||'採買中')==='官網訂購中') return;
+      const isActive=(item.goodsStatus||'採買中')==='採買中'||(item.allotted||0)<(item.qty||1);
+      if(!isActive||(item.goodsStatus||'採買中')==='缺貨'||(item.goodsStatus||'採買中')==='官網訂購中') return;
+      if((item.goodsStatus||'採買中')==='已配貨'&&(item.allotted||0)>=(item.qty||1)) return;
       const colorKey=item.color||item.variant||'';
       const key=`${item.productId}_${colorKey}_${item.size||''}`;
       if(!map[key]){
@@ -823,7 +881,7 @@ window.compilePurchaseList = function() {
         map[key]={productId:item.productId,sku:item.sku||'',productName:item.productName||'',color:colorKey,size:item.size||'',orderedQty:0,allottedQty:0,stock,product:p,customers:[]};
       }
       map[key].orderedQty+=(item.qty||0);
-      map[key].allottedQty+=(item.allotted||0); // 修正8：統計已配貨量
+      map[key].allottedQty+=(item.allotted||0);
       const cust=customers.find(c=>c.id===o.customerId);
       if(cust) map[key].customers.push({name:cust.name,qty:item.qty||0,allotted:item.allotted||0});
     });
@@ -834,9 +892,8 @@ window.compilePurchaseList = function() {
   el.innerHTML=items.map((item,idx)=>{
     const p=item.product;
     const imgs=(p?.images||[]).slice(0,2).map(url=>`<img src="${url}" alt="" style="width:50px;height:50px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">`).join('');
-    // 修正8：需採買 = 訂購量 - 已配貨量 - 庫存（不可為負）
-    const remaining=item.orderedQty-item.allottedQty; // 未配貨的數量
-    const need=Math.max(0, remaining-item.stock); // 需採買（扣掉庫存）
+    const remaining=item.orderedQty-item.allottedQty;
+    const need=Math.max(0, remaining-item.stock);
     return `
       <div class="purchase-item" id="purchase-row-${idx}">
         <div class="purchase-item-header">
@@ -852,8 +909,7 @@ window.compilePurchaseList = function() {
             <div style="font-size:12px;margin-top:3px;">
               訂購：<strong>${item.orderedQty}</strong>　
               已配貨：<strong style="color:var(--success)">${item.allottedQty}</strong>　
-              庫存：<strong>${item.stock}</strong>　
-              ${p?.variants?.find(v=>(v.color||v.name||'')===item.color&&(v.size||'')===(item.size||''))?.cost!=null?`成本：NT$ ${p.variants.find(v=>(v.color||v.name||'')===item.color&&(v.size||'')===(item.size||'')).cost}`:'' }
+              庫存：<strong>${item.stock}</strong>
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;">

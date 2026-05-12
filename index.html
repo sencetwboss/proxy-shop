@@ -105,7 +105,11 @@
     <div id="page-products" class="page hidden">
       <div class="page-header">
         <h2>商品管理</h2>
-        <button class="btn primary" onclick="openProductModal()">＋ 新增商品</button>
+        <div style="display:flex;gap:8px;">
+          <!-- 修正5：統一入庫更新按鈕放最上面 -->
+          <button class="btn outline" onclick="openBatchStockModal()">📦 入庫更新</button>
+          <button class="btn primary" onclick="openProductModal()">＋ 新增商品</button>
+        </div>
       </div>
       <div class="filter-bar">
         <select id="filter-product-category" onchange="renderProducts()">
@@ -131,12 +135,12 @@
 
 <!-- 訂單 Modal -->
 <div class="modal-overlay hidden" id="order-modal-overlay">
-  <div class="modal large">
+  <div class="modal large" id="order-modal-box">
     <div class="modal-header">
       <h3 id="order-modal-title">新增訂單</h3>
-      <button class="modal-close" onclick="closeModal('order-modal-overlay')">✕</button>
+      <button class="modal-close" onclick="closeOrderModal()">✕</button>
     </div>
-    <div class="modal-body">
+    <div class="modal-body" id="order-modal-body">
       <div class="section-card">
         <h4>客戶資料</h4>
         <div class="form-row">
@@ -183,7 +187,6 @@
           <div id="order-product-dropdown" class="dropdown hidden"></div>
         </div>
         <div id="order-items-container"></div>
-        <!-- 修正6：分類瀏覽按鈕 -->
         <div style="display:flex;gap:8px;margin-top:8px;">
           <button class="btn outline small" onclick="addOrderItemByCategory('服飾')">＋ 服飾</button>
           <button class="btn outline small" onclick="addOrderItemByCategory('代購')">＋ 代購</button>
@@ -220,7 +223,6 @@
               <input type="number" id="order-credit" value="0" min="0" oninput="calcOrderTotal()" style="flex:1;">
             </div>
           </div>
-          <!-- 修正3：訂金→定金 -->
           <div class="form-group">
             <label>定金</label>
             <div style="display:flex;align-items:center;gap:4px;">
@@ -236,7 +238,7 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn outline" onclick="closeModal('order-modal-overlay')">取消</button>
+      <button class="btn outline" onclick="closeOrderModal()">取消</button>
       <button class="btn primary" onclick="saveOrder()">💾 儲存訂單</button>
       <button class="btn success hidden" id="btn-download-order" onclick="downloadOrderImage()">🖼️ 下載圖片</button>
       <button class="btn success hidden" id="btn-download-pdf" onclick="downloadOrderPDF()">📄 下載PDF</button>
@@ -246,10 +248,10 @@
 
 <!-- 客戶 Modal -->
 <div class="modal-overlay hidden" id="customer-modal-overlay">
-  <div class="modal">
+  <div class="modal" id="customer-modal-box">
     <div class="modal-header">
       <h3 id="customer-modal-title">新增客戶</h3>
-      <button class="modal-close" onclick="closeModal('customer-modal-overlay')">✕</button>
+      <button class="modal-close" onclick="closeCustomerModal()">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-group">
@@ -268,18 +270,18 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn outline" onclick="closeModal('customer-modal-overlay')">取消</button>
-      <button class="btn primary" onclick="saveCustomer()">💾 儲存</button>
+      <button class="btn outline" onclick="closeCustomerModal()">取消</button>
+      <button class="btn primary" id="save-customer-btn" onclick="saveCustomer()">💾 儲存</button>
     </div>
   </div>
 </div>
 
 <!-- 商品 Modal -->
 <div class="modal-overlay hidden" id="product-modal-overlay">
-  <div class="modal large">
+  <div class="modal large" id="product-modal-box">
     <div class="modal-header">
       <h3 id="product-modal-title">新增商品</h3>
-      <button class="modal-close" onclick="closeModal('product-modal-overlay')">✕</button>
+      <button class="modal-close" onclick="closeProductModal()">✕</button>
     </div>
     <div class="modal-body">
       <div class="form-row">
@@ -306,7 +308,6 @@
           <input type="text" id="prod-name" placeholder="商品名稱">
         </div>
       </div>
-      <!-- 修正7：款式→顏色→尺寸 階層設計 -->
       <div class="form-group">
         <label>款式 / 顏色 → 尺寸（先設定顏色，再為每個顏色新增尺寸）</label>
         <div id="prod-colors-container"></div>
@@ -320,8 +321,8 @@
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn outline" onclick="closeModal('product-modal-overlay')">取消</button>
-      <button class="btn primary" onclick="saveProduct()">💾 儲存</button>
+      <button class="btn outline" onclick="closeProductModal()">取消</button>
+      <button class="btn primary" id="save-product-btn" onclick="saveProduct()">💾 儲存</button>
     </div>
   </div>
 </div>
@@ -342,20 +343,28 @@
   </div>
 </div>
 
-<!-- 庫存更新 Modal（修正9）-->
-<div class="modal-overlay hidden" id="stock-modal-overlay">
-  <div class="modal">
+<!-- 修正5+6：統一入庫更新 Modal -->
+<div class="modal-overlay hidden" id="batch-stock-modal-overlay">
+  <div class="modal large">
     <div class="modal-header">
-      <h3 id="stock-modal-title">庫存更新</h3>
-      <button class="modal-close" onclick="closeModal('stock-modal-overlay')">✕</button>
+      <h3>📦 入庫更新</h3>
+      <button class="modal-close" onclick="closeModal('batch-stock-modal-overlay')">✕</button>
     </div>
     <div class="modal-body">
-      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">調整各款式庫存數量後按「確認更新」</p>
-      <div id="stock-update-container"></div>
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">輸入本次新進庫存數量，系統將自動累加至現有庫存</p>
+      <div class="filter-bar" style="margin-bottom:12px;">
+        <select id="batch-stock-cat" onchange="renderBatchStockList()">
+          <option value="">全部分類</option>
+          <option value="服飾">服飾</option>
+          <option value="代購">代購</option>
+        </select>
+        <input type="text" id="batch-stock-search" placeholder="搜尋商品..." oninput="renderBatchStockList()">
+      </div>
+      <div id="batch-stock-container"></div>
     </div>
     <div class="modal-footer">
-      <button class="btn outline" onclick="closeModal('stock-modal-overlay')">取消</button>
-      <button class="btn primary" onclick="confirmStockUpdate()">✅ 確認更新</button>
+      <button class="btn outline" onclick="closeModal('batch-stock-modal-overlay')">取消</button>
+      <button class="btn primary" onclick="confirmBatchStock()">✅ 確認入庫</button>
     </div>
   </div>
 </div>
