@@ -302,6 +302,13 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
           <div class="form-group checkbox-group"><label>尾款</label><label class="toggle"><input type="checkbox" id="order-balance"> <span>已付</span></label></div>
         </div>
       </div>
+      <!-- 合併訂單提示 -->
+      <div id="merge-notice" style="display:none;background:#F0FDF4;border:1px solid #86EFAC;border-radius:8px;padding:10px 14px;margin-bottom:12px;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:16px;">🔔</span>
+        <span id="merge-notice-text" style="flex:1;font-size:13px;color:#15803d;font-weight:500;"></span>
+        <button class="btn success small" onclick="doMergeOrder()">✅ 合併追加</button>
+        <button class="btn outline small" onclick="cancelMerge()">✕ 不合併</button>
+      </div>
       <div class="section-card"><h4>商品明細</h4>
         <div style="position:relative;margin-bottom:10px;">
           <input id="order-item-search" placeholder="🔍 輸入貨號或品名搜尋..." oninput="filterOrderProductDropdown()" autocomplete="off" style="width:100%;">
@@ -360,6 +367,22 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     <div class="modal-footer">
       <button class="btn outline" onclick="closeModal('stock-modal-overlay')">取消</button>
       <button class="btn primary" onclick="confirmStockUpdate()">✅ 確認入庫</button>
+    </div>
+  </div>
+</div>
+
+<!-- 庫存歷史 Modal -->
+<div class="modal-overlay hidden" id="stock-history-modal-overlay">
+  <div class="modal large">
+    <div class="modal-header">
+      <h3 id="stock-history-title">庫存歷史</h3>
+      <button class="modal-close" onclick="closeModal('stock-history-modal-overlay')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div id="stock-history-body"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn primary" onclick="closeModal('stock-history-modal-overlay')">關閉</button>
     </div>
   </div>
 </div>
@@ -590,6 +613,7 @@ loadFirebase(() => {
         <div class="product-actions">
           <button class="btn outline small" onclick="openProductModal('${p.id}')">✏️ 編輯</button>
           <button class="btn primary small" onclick="openStockModal('${p.id}')">📦 入庫</button>
+          <button class="btn outline small" onclick="openStockHistory('${p.id}')">📋 歷史</button>
           <button class="btn danger small" onclick="deleteProduct('${p.id}')">🗑️</button>
         </div>
       </div>
@@ -748,14 +772,47 @@ loadFirebase(() => {
     const p=products.find(x=>x.id===pid);if(!p)return;
     document.getElementById('stock-modal-title').textContent=`📦 入庫 — ${esc(p.name||p.sku)}`;
     document.getElementById('stock-update-container').innerHTML=(p.variants||[]).map((v,i)=>`
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;padding:8px;background:var(--bg-muted);border-radius:6px;">
-        <div style="flex:1;font-size:13px;"><strong>${esc(v.color||v.name||'')}</strong>${v.size?' / '+esc(v.size):''}</div>
-        <div style="font-size:12px;color:var(--text-muted);">現有：${v.stock??0}</div>
-        <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:var(--text-muted);">入庫＋</span>
-          <input type="number" min="0" value="0" style="width:65px;" id="stock-input-${i}">
+      <div style="margin-bottom:10px;border:1px solid var(--border);border-radius:8px;overflow:hidden;">
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--bg-muted);">
+          <div style="flex:1;font-size:13px;"><strong>${esc(v.color||v.name||'')}</strong>${v.size?' / '+esc(v.size):''}</div>
+          <div style="font-size:12px;color:var(--text-muted);">現有：<strong>${v.stock??0}</strong> 件</div>
+          <div style="display:flex;align-items:center;gap:4px;"><span style="font-size:12px;color:var(--text-muted);">入庫＋</span>
+            <input type="number" min="0" value="0" style="width:65px;" id="stock-input-${i}">
+          </div>
         </div>
       </div>`).join('')||'<p style="color:var(--text-muted);">尚未設定款式</p>';
     openModal('stock-modal-overlay');
+  };
+  // 修正2：庫存歷史彙整（按貨號整合所有款式）
+  window.openStockHistory = function(pid){
+    const p=products.find(x=>x.id===pid);if(!p)return;
+    // 收集所有款式的歷史，合併排序
+    const allHistory=[];
+    (p.variants||[]).forEach(v=>{
+      const label=`${esc(v.color||v.name||'')}${v.size?' / '+esc(v.size):''}`;
+      (v.stockHistory||[]).forEach(h=>{
+        allHistory.push({...h,label,stock:v.stock??0});
+      });
+    });
+    allHistory.sort((a,b)=>b.date.localeCompare(a.date));
+    const histHtml=allHistory.length?allHistory.map(h=>`
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 10px;border-bottom:1px solid var(--border);">
+        <div style="width:85px;font-size:12px;color:var(--text-muted);">${h.date}</div>
+        <div style="flex:1;font-size:13px;">${h.label}</div>
+        <div style="font-size:13px;font-weight:600;${h.type==='in'?'color:var(--success)':'color:var(--danger)'};">
+          ${h.type==='in'?'▲ 入庫 +':'▼ 出庫 -'}${h.qty}
+        </div>
+      </div>`).join('')
+    :'<p style="color:var(--text-muted);text-align:center;padding:20px;">尚無紀錄</p>';
+    document.getElementById('stock-history-title').textContent=`📋 庫存歷史 — ${esc(p.name||p.sku)} (${esc(p.sku||'')})`;
+    document.getElementById('stock-history-body').innerHTML=`
+      <div style="display:flex;gap:8px;padding:8px 10px;background:var(--bg-muted);font-size:11px;font-weight:600;color:var(--text-muted);">
+        <div style="width:85px;">日期</div>
+        <div style="flex:1;">顏色 / 尺寸</div>
+        <div>數量</div>
+      </div>
+      ${histHtml}`;
+    openModal('stock-history-modal-overlay');
   };
   window.confirmStockUpdate = function(){
     const p=products.find(x=>x.id===stockUpdateProductId);if(!p)return;
@@ -823,6 +880,8 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
+    window._mergeFromOrderId=null;
+    const mn=document.getElementById('merge-notice');if(mn)mn.style.display='none';
     const o=id?orders.find(x=>x.id===id):null;
     document.getElementById('order-modal-title').textContent=id?'編輯訂單':'新增訂單';
     document.getElementById('order-customer-search').value='';
@@ -865,7 +924,43 @@ loadFirebase(() => {
     document.getElementById('customer-dropdown').classList.add('hidden');
     const si=document.getElementById('selected-customer-info');si.textContent=`${name}（${platform}）`;si.classList.remove('hidden');
     if(note){document.getElementById('note-modal-content').textContent=note;openModal('note-modal-overlay');}
+    // 自動偵測該客人是否有採買中的舊單（只在新增訂單時）
+    if(!editingOrderId){
+      const existingOrder=orders.find(o=>o.customerId===id&&o.status==='採買中');
+      if(existingOrder){
+        const itemCount=existingOrder.items?.length||0;
+        const orderNo=existingOrder.orderNo||existingOrder.id.slice(0,8);
+        // 顯示合併提示
+        document.getElementById('merge-notice').style.display='flex';
+        document.getElementById('merge-notice').dataset.orderId=existingOrder.id;
+        document.getElementById('merge-notice').dataset.orderNo=orderNo;
+        document.getElementById('merge-notice-text').textContent=`偵測到「${orderNo}」（${itemCount} 件採買中），是否追加至此訂單？`;
+      } else {
+        document.getElementById('merge-notice').style.display='none';
+      }
+    }
     triggerAutoSave();
+  };
+  window.doMergeOrder = function(){
+    const notice=document.getElementById('merge-notice');
+    const oldOrderId=notice.dataset.orderId;
+    const oldOrder=orders.find(x=>x.id===oldOrderId);
+    if(!oldOrder)return;
+    // 將舊單品項（標記為原有）合併進來，新增品項標記為「加」
+    const oldItems=(oldOrder.items||[]).map(i=>({...i,isOriginal:true}));
+    // 目前 currentOrderItems 是新增的品項，標記為追加
+    const newItems=currentOrderItems.map(i=>({...i,isAdded:true}));
+    // 合併：原有品項在前，追加在後
+    currentOrderItems=[...oldItems,...newItems];
+    // 記錄被合併的舊單 id，儲存時刪除舊單
+    window._mergeFromOrderId=oldOrderId;
+    notice.style.display='none';
+    renderOrderItems();calcOrderTotal();
+    showToast('✅ 已載入舊單品項，可繼續追加');
+  };
+  window.cancelMerge = function(){
+    document.getElementById('merge-notice').style.display='none';
+    window._mergeFromOrderId=null;
   };
   window.filterOrderProductDropdown = function(){
     const q=(document.getElementById('order-item-search')?.value||'').toLowerCase();
@@ -905,8 +1000,10 @@ loadFirebase(() => {
       const imgs=(p?.images||[]).slice(0,4).map(url=>`<img src="${url}" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">`).join('');
       const curStock=getStock(item.productId,selColor,item.size||'');
       const noStock=curStock===0&&(item.allotted||0)===0;
-      return `<div class="order-item-row" id="oi-${idx}">
+      return `<div class="order-item-row" id="oi-${idx}" style="${item.isAdded?'border-left:3px solid var(--success);':item.isOriginal?'border-left:3px solid var(--accent);':''}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
+          ${item.isAdded?'<span style="font-size:11px;font-weight:700;color:var(--success);background:var(--success-light);padding:1px 6px;border-radius:10px;">＋追加</span>':''}
+          ${item.isOriginal?'<span style="font-size:11px;color:var(--accent);background:var(--accent-light);padding:1px 6px;border-radius:10px;">原</span>':''}
           <span class="order-item-sku">${esc(item.sku||'')}</span>
           <span class="order-item-name" style="flex:1;">${esc(item.productName||'')}</span>
           ${imgs?`<div style="display:flex;gap:3px;">${imgs}</div>`:''}
@@ -1020,7 +1117,15 @@ loadFirebase(() => {
       const ymd=data.date.replace(/-/g,'');
       const cnt=orders.filter(o=>o.date===data.date).length+1;
       data.orderNo=`ORD-${ymd}-${String(cnt).padStart(3,'0')}`;data.createdAt=Date.now();
-      return db.collection('orders').add(data).then(ref=>{editingOrderId=ref.id;if(!silent)showToast('✅ 訂單已新增');});
+      return db.collection('orders').add(data).then(ref=>{
+        editingOrderId=ref.id;
+        // 若有合併舊單，刪除舊單
+        if(window._mergeFromOrderId){
+          db.collection('orders').doc(window._mergeFromOrderId).delete();
+          window._mergeFromOrderId=null;
+        }
+        if(!silent)showToast('✅ 訂單已新增');
+      });
     }
   }
   window.saveOrder = function(){
