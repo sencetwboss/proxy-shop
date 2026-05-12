@@ -41,36 +41,18 @@ window.toggleSidebar = function() {
   document.getElementById('sidebar-overlay').classList.toggle('hidden');
 };
 window.closeModal = function(id) { document.getElementById(id)?.classList.add('hidden'); };
-
-// 修正1：各自獨立關閉，不依賴 try/catch，直接呼叫
-window.closeCustomerModal = function() {
-  document.getElementById('customer-modal-overlay').classList.add('hidden');
-  resetBtn('save-customer-btn','💾 儲存');
-};
-window.closeProductModal = function() {
-  document.getElementById('product-modal-overlay').classList.add('hidden');
-  resetBtn('save-product-btn','💾 儲存');
-};
+window.closeCustomerModal = function() { document.getElementById('customer-modal-overlay').classList.add('hidden'); };
+window.closeProductModal = function() { document.getElementById('product-modal-overlay').classList.add('hidden'); };
 window.closeOrderModal = function() {
   document.getElementById('order-modal-overlay').classList.add('hidden');
-  resetBtn('save-order-btn','💾 儲存訂單');
   clearTimeout(autoSaveTimer);
 };
-
 function openModal(id) { document.getElementById(id)?.classList.remove('hidden'); }
 
-// 修正1：重設按鈕狀態的輔助函數
-function resetBtn(id, label) {
-  const btn = document.getElementById(id);
-  if(btn) { btn.disabled = false; btn.textContent = label; }
-}
-function setBtnLoading(id, label) {
-  const btn = document.getElementById(id);
-  if(btn) { btn.disabled = true; btn.textContent = label; }
-}
-
 function showToast(msg, ms=2500) {
-  const t=document.getElementById('toast'); t.textContent=msg; t.classList.remove('hidden');
+  const t=document.getElementById('toast');
+  if(!t) return;
+  t.textContent=msg; t.classList.remove('hidden');
   setTimeout(()=>t.classList.add('hidden'),ms);
 }
 function triggerAutoSave() {
@@ -114,18 +96,20 @@ window.openCustomerModal = function(id=null) {
   document.getElementById('cust-name').value=c?c.name:'';
   document.getElementById('cust-platform').value=c?(c.platform||'Line@'):'Line@';
   document.getElementById('cust-note').value=c?(c.note||''):'';
-  resetBtn('save-customer-btn','💾 儲存');
   openModal('customer-modal-overlay');
 };
 
-// 修正1：不用 try/catch，直接執行，完成後立刻關閉
 window.saveCustomer = async function() {
-  const btn=document.getElementById('save-customer-btn');
-  if(btn?.disabled) return;
   const name=document.getElementById('cust-name').value.trim();
   if(!name){showToast('⚠️ 請輸入客戶名稱');return;}
-  setBtnLoading('save-customer-btn','儲存中...');
-  const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
+  const data={
+    name,
+    platform:document.getElementById('cust-platform').value,
+    note:document.getElementById('cust-note').value.trim(),
+    updatedAt:Date.now()
+  };
+  // 先關閉視窗，再執行儲存（這樣不管成功失敗，視窗都已關閉）
+  closeCustomerModal();
   if(editingCustomerId){
     await updateDoc(doc(db,'customers',editingCustomerId),data);
   } else {
@@ -133,7 +117,6 @@ window.saveCustomer = async function() {
     await addDoc(collection(db,'customers'),data);
   }
   showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
-  closeCustomerModal();
 };
 
 window.deleteCustomer = async function(id) {
@@ -226,7 +209,6 @@ async function genSKU() {
   document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
 }
 
-// 修正2：新增顏色群組時，自動帶入上一個群組的售價、成本、尺寸和庫存
 window.addColorGroup = function(colorData={}) {
   const container=document.getElementById('prod-colors-container');
   let lastPrice='', lastCost='', lastSizes=[];
@@ -235,11 +217,10 @@ window.addColorGroup = function(colorData={}) {
     const lastGroup=existingGroups[existingGroups.length-1];
     lastPrice=lastGroup.querySelector('.color-price-input')?.value||'';
     lastCost=lastGroup.querySelector('.color-cost-input')?.value||'';
-    // 修正2：抓取上一個群組的尺寸和庫存
     lastGroup.querySelectorAll('[class^="sizes-container-"] > div').forEach(row=>{
       const size=row.querySelector('.size-name')?.value.trim()||'';
       const stock=row.querySelector('.size-stock')?.value||'0';
-      if(size) lastSizes.push({size, stock});
+      if(size) lastSizes.push({size,stock});
     });
   }
   const groupId='cg-'+Date.now()+Math.random().toString(36).slice(2,5);
@@ -250,7 +231,7 @@ window.addColorGroup = function(colorData={}) {
     <div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
       <div style="flex:2;min-width:100px;">
         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">顏色/款式名稱 <span style="color:var(--danger)">*</span></div>
-        <input type="text" placeholder="例：黑色、白色、格紋..." value="${esc(colorData.color||colorData.name||'')}" class="color-name-input" style="width:100%;">
+        <input type="text" placeholder="例：黑色、白色..." value="${esc(colorData.color||colorData.name||'')}" class="color-name-input" style="width:100%;">
       </div>
       <div style="width:90px;">
         <div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">售價</div>
@@ -268,8 +249,7 @@ window.addColorGroup = function(colorData={}) {
       <button class="btn outline small" onclick="addSizeRow('${groupId}')">＋ 新增尺寸</button>
     </div>`;
   container.appendChild(div);
-  // 修正2：使用已有資料或上一組的尺寸/庫存
-  const sizesToLoad = colorData.sizes?.length ? colorData.sizes : (lastSizes.length ? lastSizes : [{size:'',stock:0}]);
+  const sizesToLoad=colorData.sizes?.length?colorData.sizes:(lastSizes.length?lastSizes:[{size:'',stock:0}]);
   sizesToLoad.forEach(s=>addSizeRow(groupId,s));
 };
 
@@ -322,14 +302,10 @@ window.openProductModal = async function(id=null) {
   }
   if(p?.images?.length) p.images.forEach(url=>tempProductImages.push({file:null,url,existing:true,storedUrl:url}));
   renderProductImagePreviews();
-  resetBtn('save-product-btn','💾 儲存');
   openModal('product-modal-overlay');
 };
 
-// 修正1：移除 try/catch，直接執行
 window.saveProduct = async function() {
-  const btn=document.getElementById('save-product-btn');
-  if(btn?.disabled) return;
   const category=document.getElementById('prod-category').value;
   if(!category){showToast('⚠️ 請選擇商品分類');return;}
   const sku=document.getElementById('prod-sku').value;
@@ -338,7 +314,10 @@ window.saveProduct = async function() {
     const exists=products.find(p=>p.sku===sku);
     if(exists){showToast('⚠️ 貨號已存在');await genSKU();return;}
   }
-  setBtnLoading('save-product-btn','儲存中...');
+
+  // 先關閉視窗
+  closeProductModal();
+
   const imageUrls=[];
   for(const img of tempProductImages){
     if(img.existing){imageUrls.push(img.storedUrl);}
@@ -372,7 +351,6 @@ window.saveProduct = async function() {
     await addDoc(collection(db,'products'),data);
     showToast('✅ 商品已新增');
   }
-  closeProductModal();
 };
 
 window.deleteProduct = async function(id) {
@@ -388,7 +366,6 @@ window.deleteProduct = async function(id) {
   await deleteDoc(doc(db,'products',id)); showToast('🗑️ 商品已刪除');
 };
 
-// 修正3：單一品項入庫
 window.openStockModal = function(productId) {
   stockUpdateProductId=productId;
   const p=products.find(x=>x.id===productId); if(!p) return;
@@ -408,6 +385,7 @@ window.openStockModal = function(productId) {
 
 window.confirmStockUpdate = async function() {
   const p=products.find(x=>x.id===stockUpdateProductId); if(!p) return;
+  closeModal('stock-modal-overlay');
   const newVariants=p.variants.map((v,i)=>{
     const input=document.getElementById(`stock-input-${i}`);
     const add=input?Number(input.value)||0:0;
@@ -415,7 +393,6 @@ window.confirmStockUpdate = async function() {
   });
   await updateDoc(doc(db,'products',stockUpdateProductId),{variants:newVariants,updatedAt:Date.now()});
   showToast('✅ 庫存已更新');
-  closeModal('stock-modal-overlay');
 };
 
 // ===== ORDERS =====
@@ -510,7 +487,6 @@ window.openOrderModal = async function(id=null) {
   document.getElementById('btn-download-pdf').classList.toggle('hidden',!id);
   const si=document.getElementById('order-item-search'); if(si) si.value='';
   document.getElementById('order-product-dropdown')?.classList.add('hidden');
-  resetBtn('save-order-btn','💾 儲存訂單');
   openModal('order-modal-overlay');
   setTimeout(()=>{ const body=document.getElementById('order-modal-body'); if(body) body.scrollTop=0; },50);
 };
@@ -542,8 +518,7 @@ function addProductToOrder(productId) {
 
 window.addOrderItemByCategory = function(category) {
   const catProducts=products.filter(p=>p.category===category).sort((a,b)=>{
-    const na=parseInt((a.sku||'').slice(1))||0, nb=parseInt((b.sku||'').slice(1))||0;
-    return na-nb;
+    const na=parseInt((a.sku||'').slice(1))||0, nb=parseInt((b.sku||'').slice(1))||0; return na-nb;
   });
   if(!catProducts.length){showToast(`⚠️ 尚無${category}商品`);return;}
   const container=document.getElementById('order-items-container');
@@ -578,14 +553,12 @@ function renderOrderItemsUI() {
     const selectedColor=item.color||item.variant||'';
     const sizesForColor=variants.filter(v=>(v.color||v.name||'')===selectedColor).map(v=>v.size||'').filter(Boolean);
     const imgs=(p?.images||[]).slice(0,4).map(url=>`<img src="${url}" alt="" style="width:34px;height:34px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">`).join('');
-    // 修正5：取得目前庫存，決定配貨量上限
     const currentStock=getVariantStock(item.productId, selectedColor, item.size||'');
-    // 修正6：配貨量上限 = min(訂購量, 已配+庫存)，但不超過訂購量
     const maxAllotted=item.qty||1;
-    // 修正5：若庫存為0且尚未配貨，顯示警告
-    const stockWarning = currentStock===0 && (item.allotted||0)===0;
+    const stockWarning=currentStock===0&&(item.allotted||0)===0;
+    const allottedDisabled=currentStock===0&&(item.allotted||0)===0;
     return `
-      <div class="order-item-row" id="order-item-${idx}" style="${stockWarning?'border-color:var(--warn);':''}">
+      <div class="order-item-row" id="order-item-${idx}">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap;">
           <span class="order-item-sku">${esc(item.sku||'')}</span>
           <span class="order-item-name" style="flex:1;min-width:80px;">${esc(item.productName||'')}</span>
@@ -616,15 +589,11 @@ function renderOrderItemsUI() {
             <input type="number" min="1" value="${item.qty||1}" style="width:100%;font-size:13px;padding:6px 4px;" oninput="updateOrderItem(${idx},'qty',this.value)">
           </div>
           <div style="width:60px;">
-            <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">
-              配貨量
-              ${stockWarning?'<span style="color:var(--warn)" title="庫存不足">⚠️</span>':''}
-            </div>
-            <!-- 修正5+6：max=訂購量，庫存0時disabled -->
+            <div style="font-size:11px;color:var(--text-muted);margin-bottom:2px;">配貨${stockWarning?'⚠️':''}</div>
             <input type="number" min="0" max="${maxAllotted}"
               value="${item.allotted||0}"
-              ${currentStock===0&&(item.allotted||0)===0?'disabled title="庫存為0，無法配貨"':''}
-              style="width:100%;font-size:13px;padding:6px 4px;background:${currentStock===0&&(item.allotted||0)===0?'var(--bg-muted)':'var(--accent-light)'};border-color:var(--accent);"
+              ${allottedDisabled?'disabled title="庫存為0"':''}
+              style="width:100%;font-size:13px;padding:6px 4px;background:${allottedDisabled?'var(--bg-muted)':'var(--accent-light)'};border-color:var(--accent);"
               oninput="onAllottedChange(${idx},this.value)">
           </div>
           <div style="width:75px;">
@@ -644,7 +613,7 @@ function renderOrderItemsUI() {
             </select>
           </div>
         </div>
-        ${currentStock>0?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">目前庫存：${currentStock} 件</div>`:''}
+        ${currentStock>0||item.allotted>0?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">目前庫存：${currentStock} 件</div>`:''}
       </div>`;
   }).join('');
 }
@@ -659,34 +628,22 @@ window.onColorChange = function(idx, colorValue) {
   renderOrderItemsUI(); calcOrderTotal(); triggerAutoSave();
 };
 
-// 修正4+5+6：配貨量變更
 window.onAllottedChange = async function(idx, value) {
   const item=currentOrderItems[idx];
   const qty=item.qty||1;
-  // 修正6：不超過訂購量
-  let newAllotted=Math.min(Number(value)||0, qty);
-  newAllotted=Math.max(0,newAllotted);
-
-  // 修正5：不超過庫存
+  let newAllotted=Math.max(0,Math.min(Number(value)||0,qty));
   const colorKey=item.color||item.variant||'';
-  const currentStock=getVariantStock(item.productId, colorKey, item.size||'');
+  const currentStock=getVariantStock(item.productId,colorKey,item.size||'');
   const oldAllotted=Number(item.allotted||0);
   const diff=newAllotted-oldAllotted;
-
-  // 如果要增加配貨，確認庫存是否足夠
-  if(diff>0 && currentStock<diff){
-    showToast(`⚠️ 庫存不足！目前庫存：${currentStock} 件`);
-    newAllotted=oldAllotted+currentStock; // 最多配到庫存量
-    newAllotted=Math.min(newAllotted,qty);
+  if(diff>0&&currentStock<diff){
+    showToast(`⚠️ 庫存不足！現有：${currentStock} 件`);
+    newAllotted=Math.min(oldAllotted+currentStock,qty);
   }
-
   currentOrderItems[idx].allotted=newAllotted;
-  // 修正4：配貨量 >= 訂購量時，自動設為「已配貨」
   currentOrderItems[idx].goodsStatus=newAllotted>=qty?'已配貨':'採買中';
-
-  // 同步扣減庫存
   const actualDiff=newAllotted-oldAllotted;
-  if(actualDiff!==0 && editingOrderId){
+  if(actualDiff!==0&&editingOrderId){
     const p=products.find(x=>x.id===item.productId);
     if(p?.variants?.length){
       const vIdx=p.variants.findIndex(v=>(v.color||v.name||'')===colorKey&&(v.size||'')===(item.size||''));
@@ -781,16 +738,13 @@ async function doSaveOrder(silent=false) {
   }
 }
 
-// 修正1：saveOrder 不用 try/catch
 window.saveOrder = async function() {
-  const btn=document.getElementById('save-order-btn');
-  if(btn?.disabled) return;
   const customerId=document.getElementById('order-customer-id').value;
   if(!customerId){showToast('⚠️ 請選擇客戶');return;}
   if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
-  setBtnLoading('save-order-btn','儲存中...');
-  await doSaveOrder(false);
+  // 先關閉視窗，再儲存
   closeOrderModal();
+  await doSaveOrder(false);
 };
 
 window.deleteOrder = async function(id) {
