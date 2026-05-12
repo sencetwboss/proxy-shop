@@ -368,6 +368,11 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 
 <!-- ============ 單一 script，不用 type="module" ============ -->
 <script>
+// ▼▼▼ Cloudinary 設定（圖片上傳用）▼▼▼
+// 申請免費帳號：https://cloudinary.com → 登入後 Dashboard 找 Cloud Name
+// 然後到 Settings > Upload > Add upload preset，設為 Unsigned，名稱填 sencetw_unsigned
+window.CLOUDINARY_CLOUD_NAME = 'dvbkzxh6m'; // ← 填入你的 Cloud Name
+
 // ▼▼▼ 填入你的 Firebase 設定 ▼▼▼
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyAzb6U4KqnY9l-JGzv1VwnMDCe47_yEt-g",
@@ -489,16 +494,18 @@ loadFirebase(() => {
     const el=document.getElementById('customers-list');if(!el)return;
     el.innerHTML=list.length===0?'<p style="color:var(--text-muted);text-align:center;padding:40px;">尚無客戶資料</p>':list.map(c=>`
       <div class="card customer-card">
-        <div class="card-body">
-          <div class="customer-info">
-            <h4>${esc(c.name)}</h4>
-            <span class="platform-tag">${esc(c.platform||'')}</span>
-            ${c.note?`<button class="btn outline small mt-1" onclick="showNote('${c.id}')">📝 備註</button>`:''}
+        <div class="card-body" style="flex-direction:column;align-items:flex-start;gap:8px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;width:100%;">
+            <div class="customer-info">
+              <h4>${esc(c.name)}</h4>
+              <span class="platform-tag">${esc(c.platform||'')}</span>
+            </div>
+            <div class="customer-actions">
+              <button class="btn outline small" onclick="openCustomerModal('${c.id}')">✏️ 編輯</button>
+              <button class="btn danger small" onclick="deleteCustomer('${c.id}')">🗑️</button>
+            </div>
           </div>
-          <div class="customer-actions">
-            <button class="btn outline small" onclick="openCustomerModal('${c.id}')">✏️ 編輯</button>
-            <button class="btn danger small" onclick="deleteCustomer('${c.id}')">🗑️</button>
-          </div>
+          ${c.note?`<div style="width:100%;padding:8px 10px;background:var(--bg-muted);border-radius:6px;font-size:13px;color:var(--text-muted);white-space:pre-wrap;line-height:1.6;border-left:3px solid var(--accent);">${esc(c.note)}</div>`:''}
         </div>
       </div>`).join('');
   };
@@ -552,13 +559,21 @@ loadFirebase(() => {
   };
   function productCardHtml(p){
     const imgs=(p.images||[]).slice(0,4).map(url=>`<img src="${url}" onclick="window.open('${url}','_blank')">`).join('');
-    const rows=(p.variants||[]).map(v=>`<tr>
-      <td style="padding:3px 6px;">${esc(v.color||v.name||'')}</td>
-      <td style="padding:3px 6px;">${esc(v.size||'-')}</td>
-      <td style="padding:3px 6px;text-align:right;">${v.price!=null?'NT$ '+v.price:'-'}</td>
-      <td style="padding:3px 6px;text-align:right;">${v.cost!=null?'NT$ '+v.cost:'-'}</td>
-      <td style="padding:3px 6px;text-align:right;${(v.stock||0)<=3?'color:var(--danger);font-weight:700;':''}">${v.stock??0}</td>
-    </tr>`).join('');
+    const rows=(p.variants||[]).map((v,vi)=>{
+      const hist=(v.stockHistory||[]);
+      const histHtml=hist.length?hist.slice().reverse().map(h=>`<div style="font-size:11px;color:var(--text-muted);padding:1px 0;">${h.date} ${h.type==='in'?'<span style=\"color:var(--success)\">入庫 +'+h.qty+'</span>':'<span style=\"color:var(--danger)\">出庫 -'+h.qty+'</span>'}</div>`).join(''):'<div style="font-size:11px;color:var(--text-muted);">無紀錄</div>';
+      return `<tr>
+        <td style="padding:3px 6px;">${esc(v.color||v.name||'')}</td>
+        <td style="padding:3px 6px;">${esc(v.size||'-')}</td>
+        <td style="padding:3px 6px;text-align:right;">${v.price!=null?'NT$ '+v.price:'-'}</td>
+        <td style="padding:3px 6px;text-align:right;">${v.cost!=null?'NT$ '+v.cost:'-'}</td>
+        <td style="padding:3px 6px;text-align:right;">
+          <span style="${(v.stock||0)<=3?'color:var(--danger);font-weight:700;':''}">${v.stock??0}</span>
+          <button onclick="toggleHistory('hist-${p.id}-${vi}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--accent);margin-left:2px;" title="查看歷史">📋</button>
+          <div id="hist-${p.id}-${vi}" style="display:none;margin-top:4px;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;">${histHtml}</div>
+        </td>
+      </tr>`;
+    }).join('');
     const total=(p.variants||[]).reduce((s,v)=>s+(v.stock||0),0);
     return `<div class="card product-card">
       <div class="card-header"><span class="product-sku">${esc(p.sku||'')}</span><span class="product-category-tag">${esc(p.category||'')}</span></div>
@@ -568,7 +583,8 @@ loadFirebase(() => {
         ${p.variants?.length?`<table style="width:100%;font-size:12px;margin-top:6px;border-collapse:collapse;">
           <thead><tr style="background:var(--bg-muted);">
             <th style="padding:3px 6px;text-align:left;">顏色</th><th style="padding:3px 6px;text-align:left;">尺寸</th>
-            <th style="padding:3px 6px;text-align:right;">售價</th><th style="padding:3px 6px;text-align:right;">成本</th><th style="padding:3px 6px;text-align:right;">庫存</th>
+            <th style="padding:3px 6px;text-align:right;">售價</th><th style="padding:3px 6px;text-align:right;">成本</th>
+            <th style="padding:3px 6px;text-align:right;">庫存 📋</th>
           </tr></thead><tbody>${rows}</tbody></table>
           <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">總庫存：${total} 件</div>`:'<div style="font-size:12px;color:var(--text-muted);">尚未設定款式</div>'}
         <div class="product-actions">
@@ -579,6 +595,10 @@ loadFirebase(() => {
       </div>
     </div>`;
   }
+  window.toggleHistory = function(id){
+    const el=document.getElementById(id);
+    if(el) el.style.display=el.style.display==='none'?'block':'none';
+  };
   window.onCategoryChange = function(){if(!editingProductId)genSKU();};
   function genSKU(){
     const cat=document.getElementById('prod-category').value;
@@ -695,11 +715,15 @@ loadFirebase(() => {
     // 立刻關閉視窗
     closeProductModal();
     showToast(isEdit?'✅ 商品已更新':'✅ 商品已新增');
-    // 背景上傳圖片並儲存
+    // 背景上傳圖片並儲存（使用 Cloudinary）
     const uploadPromises=tempProductImages.map(img=>{
       if(img.existing)return Promise.resolve(img.storedUrl);
-      const r=storage.ref(`products/${sku}_${Date.now()}_${img.file.name}`);
-      return r.put(img.file).then(()=>r.getDownloadURL());
+      const fd=new FormData();
+      fd.append('file',img.file);
+      fd.append('upload_preset','sencetw_unsigned');
+      fd.append('cloud_name', window.CLOUDINARY_CLOUD_NAME||'sencetw');
+      return fetch(`https://api.cloudinary.com/v1_1/${window.CLOUDINARY_CLOUD_NAME||'sencetw'}/image/upload`,{method:'POST',body:fd})
+        .then(r=>r.json()).then(d=>d.secure_url||'');
     });
     Promise.all(uploadPromises).then(imageUrls=>{
       const data={category,sku,vendor,name,variants,images:imageUrls,updatedAt:Date.now()};
@@ -736,7 +760,14 @@ loadFirebase(() => {
   window.confirmStockUpdate = function(){
     const p=products.find(x=>x.id===stockUpdateProductId);if(!p)return;
     closeModal('stock-modal-overlay');
-    const nv=p.variants.map((v,i)=>{const inp=document.getElementById(`stock-input-${i}`);const add=inp?Number(inp.value)||0:0;return add>0?{...v,stock:(v.stock||0)+add}:v;});
+    const today=new Date().toISOString().slice(0,10);
+    const nv=p.variants.map((v,i)=>{
+      const inp=document.getElementById(`stock-input-${i}`);
+      const add=inp?Number(inp.value)||0:0;
+      if(add<=0)return v;
+      const hist=[...(v.stockHistory||[]),{date:today,type:'in',qty:add}];
+      return{...v,stock:(v.stock||0)+add,stockHistory:hist};
+    });
     db.collection('products').doc(stockUpdateProductId).update({variants:nv,updatedAt:Date.now()}).then(()=>showToast('✅ 庫存已更新'));
   };
 
@@ -935,7 +966,13 @@ loadFirebase(() => {
       const p=products.find(x=>x.id===item.productId);
       if(p?.variants?.length){
         const vi=p.variants.findIndex(v=>(v.color||v.name||'')===color&&(v.size||'')===(item.size||''));
-        if(vi>=0){const nv=[...p.variants];nv[vi]={...nv[vi],stock:Math.max(0,(nv[vi].stock||0)-actualDiff)};
+        if(vi>=0){
+          const nv=[...p.variants];
+          const today=new Date().toISOString().slice(0,10);
+          const hist=[...(nv[vi].stockHistory||[])];
+          if(actualDiff>0) hist.push({date:today,type:'out',qty:actualDiff});
+          else hist.push({date:today,type:'in',qty:Math.abs(actualDiff)});
+          nv[vi]={...nv[vi],stock:Math.max(0,(nv[vi].stock||0)-actualDiff),stockHistory:hist};
           db.collection('products').doc(p.id).update({variants:nv});
         }
       }
