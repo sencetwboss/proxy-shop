@@ -514,22 +514,13 @@ loadFirebase(() => {
     openModal('customer-modal-overlay');
   };
   window.saveCustomer = function(){
-    const btn=document.getElementById('save-customer-btn');
-    if(btn&&btn.disabled)return;
     const name=document.getElementById('cust-name').value.trim();
     if(!name){showToast('⚠️ 請輸入客戶名稱');return;}
-    if(btn){btn.disabled=true;btn.textContent='儲存中...';}
     const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
-    const promise=editingCustomerId
-      ?db.collection('customers').doc(editingCustomerId).update(data)
-      :db.collection('customers').add({...data,createdAt:Date.now()});
-    promise.then(()=>{
-      showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
-      closeCustomerModal();
-    }).catch(()=>{
-      showToast('❌ 儲存失敗');
-      if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
-    });
+    closeCustomerModal();
+    showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
+    if(editingCustomerId){db.collection('customers').doc(editingCustomerId).update(data);}
+    else{db.collection('customers').add({...data,createdAt:Date.now()});}
   };
   window.deleteCustomer = function(id){
     if(!confirm('確定刪除此客戶？'))return;
@@ -681,14 +672,11 @@ loadFirebase(() => {
     openModal('product-modal-overlay');
   };
   window.saveProduct = function(){
-    const btn=document.getElementById('save-product-btn');
-    if(btn&&btn.disabled)return;
     const category=document.getElementById('prod-category').value;
     if(!category){showToast('⚠️ 請選擇商品分類');return;}
     const sku=document.getElementById('prod-sku').value;
     if(!sku){showToast('⚠️ 請先選擇分類');return;}
     if(!editingProductId&&products.find(p=>p.sku===sku)){showToast('⚠️ 貨號已存在');genSKU();return;}
-    if(btn){btn.disabled=true;btn.textContent='儲存中...';}
     // 收集 variants
     const variants=[];
     document.querySelectorAll('#prod-colors-container > div[id^="cg-"]').forEach(group=>{
@@ -701,24 +689,22 @@ loadFirebase(() => {
         if(cn||sz)variants.push({color:cn,name:cn,size:sz,price:pr!==''&&pr!=null?Number(pr):null,cost:co!==''&&co!=null?Number(co):null,stock:st});
       });
     });
-    // 上傳圖片後儲存
+    const vendor=document.getElementById('prod-vendor').value.trim();
+    const name=document.getElementById('prod-name').value.trim();
+    const isEdit=editingProductId;
+    // 立刻關閉視窗
+    closeProductModal();
+    showToast(isEdit?'✅ 商品已更新':'✅ 商品已新增');
+    // 背景上傳圖片並儲存
     const uploadPromises=tempProductImages.map(img=>{
       if(img.existing)return Promise.resolve(img.storedUrl);
       const r=storage.ref(`products/${sku}_${Date.now()}_${img.file.name}`);
       return r.put(img.file).then(()=>r.getDownloadURL());
     });
     Promise.all(uploadPromises).then(imageUrls=>{
-      const data={category,sku,vendor:document.getElementById('prod-vendor').value.trim(),name:document.getElementById('prod-name').value.trim(),variants,images:imageUrls,updatedAt:Date.now()};
-      const promise=editingProductId
-        ?db.collection('products').doc(editingProductId).update(data)
-        :db.collection('products').add({...data,createdAt:Date.now()});
-      return promise;
-    }).then(()=>{
-      showToast(editingProductId?'✅ 商品已更新':'✅ 商品已新增');
-      closeProductModal();
-    }).catch(()=>{
-      showToast('❌ 儲存失敗');
-      if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
+      const data={category,sku,vendor,name,variants,images:imageUrls,updatedAt:Date.now()};
+      if(isEdit){db.collection('products').doc(isEdit).update(data);}
+      else{db.collection('products').add({...data,createdAt:Date.now()});}
     });
   };
   window.deleteProduct = function(id){
@@ -1001,15 +987,12 @@ loadFirebase(() => {
     }
   }
   window.saveOrder = function(){
-    const btn=document.getElementById('save-order-btn');
-    if(btn&&btn.disabled)return;
     if(!document.getElementById('order-customer-id').value){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
-    if(btn){btn.disabled=true;btn.textContent='儲存中...';}
-    doSaveOrder(false).then(()=>{closeOrderModal();}).catch(()=>{
-      showToast('❌ 儲存失敗');
-      if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
-    });
+    // 立刻關閉視窗
+    closeOrderModal();
+    showToast('✅ 儲存中...');
+    doSaveOrder(false);
   };
   window.deleteOrder = function(id){
     if(!confirm('確定刪除？'))return;
