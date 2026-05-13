@@ -469,12 +469,20 @@ loadFirebase(() => {
     if(!email||!password){errEl.textContent='請輸入帳號和密碼';errEl.classList.remove('hidden');return;}
     btn.textContent='登入中...'; btn.disabled=true; errEl.classList.add('hidden');
     auth.signInWithEmailAndPassword(email,password).then(cred=>{
-      // 登入成功立刻切換畫面，不等 onAuthStateChanged
       showApp(cred.user);
     }).catch(e=>{
-      const msgs={'auth/invalid-credential':'帳號或密碼錯誤','auth/user-not-found':'帳號不存在','auth/wrong-password':'密碼錯誤','auth/too-many-requests':'嘗試次數過多'};
-      errEl.textContent=msgs[e.code]||'登入失敗：'+e.message;
+      const msgs={
+        'auth/invalid-credential':'❌ 帳號或密碼錯誤，請重新確認',
+        'auth/invalid-email':'❌ Email 格式不正確',
+        'auth/user-not-found':'❌ 此帳號不存在',
+        'auth/wrong-password':'❌ 密碼錯誤，請重新輸入',
+        'auth/too-many-requests':'❌ 嘗試次數過多，請稍後再試',
+        'auth/user-disabled':'❌ 此帳號已被停用',
+        'auth/network-request-failed':'❌ 網路連線失敗，請檢查網路'
+      };
+      errEl.textContent=msgs[e.code]||'❌ 登入失敗，請重試';
       errEl.classList.remove('hidden');
+      document.getElementById('login-password').value=''; // 清空密碼欄
       btn.textContent='登入'; btn.disabled=false;
     });
   };
@@ -981,7 +989,7 @@ loadFirebase(() => {
     document.getElementById('btn-download-pdf').classList.toggle('hidden',!id);
     const srch=document.getElementById('order-item-search');if(srch)srch.value='';
     document.getElementById('order-product-dropdown')?.classList.add('hidden');
-    const btn=document.getElementById('save-order-btn');if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
+    const saveBtn=document.getElementById('save-order-btn');if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='💾 儲存訂單';}
     openModal('order-modal-overlay');
     setTimeout(()=>{const b=document.getElementById('order-modal-body');if(b)b.scrollTop=0;},50);
   };
