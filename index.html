@@ -448,6 +448,7 @@ loadFirebase(() => {
   let editingCustomerId=null, editingProductId=null, editingOrderId=null;
   let tempProductImages=[], currentOrderItems=[];
   let autoSaveTimer=null, stockUpdateProductId=null;
+  let _savingOrder=false;
 
   // ===== Auth =====
   let appInited = false;
@@ -762,6 +763,12 @@ loadFirebase(() => {
     if(!category){showToast('⚠️ 請選擇商品分類');return;}
     const sku=document.getElementById('prod-sku').value;
     if(!sku){showToast('⚠️ 請先選擇分類');return;}
+    const name=document.getElementById('prod-name').value.trim();
+    if(!name){showToast('⚠️ 請輸入品名');return;}
+    // 修正1：品名不可重複（編輯時排除自己）
+    const dupName=products.find(p=>p.name===name&&p.id!==editingProductId);
+    if(dupName){showToast(`⚠️ 品名「${name}」已存在（${dupName.sku}）`);return;}
+    // 修正2：貨號不可重複（含已刪除的）
     if(!editingProductId&&products.find(p=>p.sku===sku)){showToast('⚠️ 貨號已存在');genSKU();return;}
     // 收集 variants
     const variants=[];
@@ -776,7 +783,6 @@ loadFirebase(() => {
       });
     });
     const vendor=document.getElementById('prod-vendor').value.trim();
-    const name=document.getElementById('prod-name').value.trim();
     const isEdit=editingProductId;
     // 立刻關閉視窗
     closeProductModal();
@@ -946,7 +952,10 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
-    window._mergeFromOrderId=null; // 開啟新訂單時才清除
+    window._mergeFromOrderId=null;
+    _savingOrder=false; // 重置儲存鎖
+    const btn=document.getElementById('save-order-btn');
+    if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
     const mn=document.getElementById('merge-notice');if(mn)mn.style.display='none';
     const o=id?orders.find(x=>x.id===id):null;
     document.getElementById('order-modal-title').textContent=id?'編輯訂單':'新增訂單';
@@ -1192,19 +1201,31 @@ loadFirebase(() => {
       });
     }
   }
+  let _savingOrder=false; // 修正3：防止重複儲存
   window.saveOrder = function(){
+    if(_savingOrder){showToast('⚠️ 儲存中，請勿重複點擊');return;}
     if(!document.getElementById('order-customer-id').value){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
-    // 修正3：先儲存（保留 _mergeFromOrderId），儲存完再關閉
-    const mergeId=window._mergeFromOrderId; // 先備份，避免被清掉
+    _savingOrder=true;
+    const btn=document.getElementById('save-order-btn');
+    if(btn){btn.disabled=true;btn.textContent='儲存中...';}
+    const mergeId=window._mergeFromOrderId;
     doSaveOrder(false).then(()=>{
-      closeOrderModal();
-      // 若有合併，儲存完後刪舊單
+      _savingOrder=false;
+      closeOrderModal(); // 修正3+5：儲存後關閉視窗
+      if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
+      // 修正4：合併後刪除原始訂單
       if(mergeId){
         db.collection('orders').doc(mergeId).delete().then(()=>{
-          showToast('✅ 已合併並刪除舊訂單');
+          showToast('✅ 已合併並刪除原始訂單');
+        }).catch(()=>{
+          showToast('⚠️ 合併成功，但原始訂單刪除失敗，請手動刪除');
         });
       }
+    }).catch(()=>{
+      _savingOrder=false;
+      if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
+      showToast('❌ 儲存失敗，請重試');
     });
   };
   window.deleteOrder = function(id){
