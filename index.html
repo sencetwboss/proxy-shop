@@ -437,6 +437,16 @@ loadFirebase(() => {
   let autoSaveTimer=null, stockUpdateProductId=null;
 
   // ===== Auth =====
+  let appInited = false;
+
+  function showApp(user) {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('main-app').classList.remove('hidden');
+    document.getElementById('user-avatar').textContent=(user.email||'U')[0].toUpperCase();
+    document.getElementById('user-email-display').textContent=user.email;
+    if(!appInited){appInited=true;initApp();}
+  }
+
   window.doLogin = function() {
     const email=document.getElementById('login-email').value.trim();
     const password=document.getElementById('login-password').value;
@@ -444,23 +454,30 @@ loadFirebase(() => {
     const btn=document.getElementById('login-btn');
     if(!email||!password){errEl.textContent='請輸入帳號和密碼';errEl.classList.remove('hidden');return;}
     btn.textContent='登入中...'; btn.disabled=true; errEl.classList.add('hidden');
-    auth.signInWithEmailAndPassword(email,password).catch(e=>{
+    auth.signInWithEmailAndPassword(email,password).then(cred=>{
+      // 登入成功立刻切換畫面，不等 onAuthStateChanged
+      showApp(cred.user);
+    }).catch(e=>{
       const msgs={'auth/invalid-credential':'帳號或密碼錯誤','auth/user-not-found':'帳號不存在','auth/wrong-password':'密碼錯誤','auth/too-many-requests':'嘗試次數過多'};
       errEl.textContent=msgs[e.code]||'登入失敗：'+e.message;
       errEl.classList.remove('hidden');
       btn.textContent='登入'; btn.disabled=false;
     });
   };
-  window.doLogout = function() { auth.signOut(); };
+  window.doLogout = function() {
+    appInited=false;
+    auth.signOut().then(()=>{
+      document.getElementById('login-screen').classList.remove('hidden');
+      document.getElementById('main-app').classList.add('hidden');
+      document.getElementById('login-btn').textContent='登入';
+      document.getElementById('login-btn').disabled=false;
+    });
+  };
 
+  // 頁面重新整理時，若已登入則自動恢復
   auth.onAuthStateChanged(user=>{
-    if(user){
-      document.getElementById('login-screen').classList.add('hidden');
-      document.getElementById('main-app').classList.remove('hidden');
-      document.getElementById('user-avatar').textContent=(user.email||'U')[0].toUpperCase();
-      document.getElementById('user-email-display').textContent=user.email;
-      initApp();
-    } else {
+    if(user&&!appInited){showApp(user);}
+    else if(!user){
       document.getElementById('login-screen').classList.remove('hidden');
       document.getElementById('main-app').classList.add('hidden');
     }
