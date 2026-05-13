@@ -171,6 +171,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
       <a class="nav-item" onclick="switchPage('products',this)"><span class="nav-icon">📦</span><span>商品管理</span></a>
       <a class="nav-item" onclick="switchPage('orders',this)"><span class="nav-icon">📋</span><span>訂單管理</span></a>
       <a class="nav-item" onclick="switchPage('purchase',this)"><span class="nav-icon">🛒</span><span>採買清單</span></a>
+      <a class="nav-item" onclick="switchPage('stockhistory',this)"><span class="nav-icon">📊</span><span>歷史庫存</span></a>
     </div>
     <div class="sidebar-footer">
       <div class="user-info">
@@ -219,6 +220,18 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     <div id="page-purchase" class="page hidden">
       <div class="page-header"><h2>採買清單</h2><button class="btn primary" onclick="compilePurchaseList()">📊 統整</button></div>
       <div id="purchase-list"></div>
+    </div>
+    <div id="page-stockhistory" class="page hidden">
+      <div class="page-header"><h2>歷史庫存查詢</h2></div>
+      <div class="filter-bar">
+        <input id="sh-search" placeholder="輸入貨號或品名搜尋..." oninput="renderStockHistory()" style="flex:2;">
+        <select id="sh-type" onchange="renderStockHistory()">
+          <option value="">全部類型</option>
+          <option value="in">入庫</option>
+          <option value="out">出庫（配貨）</option>
+        </select>
+      </div>
+      <div id="stockhistory-list"></div>
     </div>
   </main>
 </div>
@@ -486,7 +499,10 @@ loadFirebase(() => {
   function initApp() {
     db.collection('customers').onSnapshot(snap=>{customers=snap.docs.map(d=>({id:d.id,...d.data()}));renderCustomers();});
     db.collection('products').onSnapshot(snap=>{products=snap.docs.map(d=>({id:d.id,...d.data()}));renderProducts();});
-    db.collection('orders').orderBy('date','desc').onSnapshot(snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();});
+    db.collection('orders').orderBy('createdAt','desc').onSnapshot(snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();}).catch(()=>{
+      // 若 createdAt index 還沒建立，先用 date 排序
+      db.collection('orders').orderBy('date','desc').onSnapshot(snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();});
+    });
     scheduleAutoAllot();
     switchPage('customers',document.querySelector('.nav-item'));
   }
@@ -609,8 +625,7 @@ loadFirebase(() => {
         <td style="padding:3px 6px;text-align:right;">${v.cost!=null?'NT$ '+v.cost:'-'}</td>
         <td style="padding:3px 6px;text-align:right;">
           <span style="${(v.stock||0)<=3?'color:var(--danger);font-weight:700;':''}">${v.stock??0}</span>
-          <button onclick="toggleHistory('hist-${p.id}-${vi}')" style="background:none;border:none;cursor:pointer;font-size:10px;color:var(--accent);margin-left:2px;" title="查看歷史">📋</button>
-          <div id="hist-${p.id}-${vi}" style="display:none;margin-top:4px;max-height:80px;overflow-y:auto;border-top:1px solid var(--border);padding-top:4px;">${histHtml}</div>
+
         </td>
       </tr>`;
     }).join('');
@@ -630,7 +645,6 @@ loadFirebase(() => {
         <div class="product-actions">
           <button class="btn outline small" onclick="openProductModal('${p.id}')">✏️ 編輯</button>
           <button class="btn primary small" onclick="openStockModal('${p.id}')">📦 入庫</button>
-          <button class="btn outline small" onclick="openStockHistory('${p.id}')">📋 歷史</button>
           <button class="btn danger small" onclick="deleteProduct('${p.id}')">🗑️</button>
         </div>
       </div>
@@ -689,7 +703,18 @@ loadFirebase(() => {
       <button class="btn outline small" onclick="addSizeRow('${gid}')">＋ 新增尺寸</button>
     </div>`;
     container.appendChild(div);
-    const toLoad=colorData.sizes?.length?colorData.sizes:(ls.length?ls:[{size:'',stock:0}]);
+    let toLoad;
+    if(colorData.sizes?.length){
+      toLoad=colorData.sizes;
+    } else if(ls.length){
+      // 上一組有尺寸記錄：帶入（含庫存）
+      toLoad=ls;
+    } else {
+      // 上一組沒有尺寸，只帶入庫存量
+      const lastGroup=existing.length>0?existing[existing.length-1]:null;
+      const lastStock=lastGroup?lastGroup.querySelector('.size-stock')?.value||'0':'0';
+      toLoad=[{size:'',stock:lastStock}];
+    }
     toLoad.forEach(s=>addSizeRow(gid,s));
   };
   window.addSizeRow = function(gid,s={}){
@@ -1129,19 +1154,24 @@ loadFirebase(() => {
       deposit:document.getElementById('order-deposit').checked,balance:document.getElementById('order-balance').checked,
       items:currentOrderItems,updatedAt:Date.now()};
     if(editingOrderId){
-      return db.collection('orders').doc(editingOrderId).update(data).then(()=>{if(!silent)showToast('✅ 訂單已更新');else showToast('💾 自動儲存',1500);});
+      return db.collection('orders').doc(editingOrderId).update(data).then(()=>{
+        if(!silent)showToast('✅ 訂單已更新');else showToast('💾 自動儲存',1500);
+      });
     } else {
       const ymd=data.date.replace(/-/g,'');
       const cnt=orders.filter(o=>o.date===data.date).length+1;
       data.orderNo=`ORD-${ymd}-${String(cnt).padStart(3,'0')}`;data.createdAt=Date.now();
       return db.collection('orders').add(data).then(ref=>{
         editingOrderId=ref.id;
-        // 若有合併舊單，刪除舊單
-        if(window._mergeFromOrderId){
-          db.collection('orders').doc(window._mergeFromOrderId).delete();
-          window._mergeFromOrderId=null;
-        }
         if(!silent)showToast('✅ 訂單已新增');
+        // 修正3：合併後確實刪除舊單
+        if(window._mergeFromOrderId){
+          const oldId=window._mergeFromOrderId;
+          window._mergeFromOrderId=null;
+          db.collection('orders').doc(oldId).delete().then(()=>{
+            showToast('✅ 已合併並刪除舊訂單');
+          });
+        }
       });
     }
   }
@@ -1215,6 +1245,70 @@ loadFirebase(() => {
   };
 
   // ===== PURCHASE LIST =====
+  // ===== 歷史庫存查詢頁面 =====
+  window.renderStockHistory = function(){
+    const search=(document.getElementById('sh-search')?.value||'').toLowerCase();
+    const typeFilter=document.getElementById('sh-type')?.value||'';
+    const el=document.getElementById('stockhistory-list');if(!el)return;
+    if(!search&&!typeFilter){
+      el.innerHTML='<p style="color:var(--text-muted);text-align:center;padding:40px;">請輸入貨號或品名搜尋</p>';
+      return;
+    }
+    // 收集所有符合條件的商品歷史
+    const matchedProducts=products.filter(p=>
+      !search||p.sku?.toLowerCase().includes(search)||p.name?.toLowerCase().includes(search)
+    );
+    if(!matchedProducts.length){
+      el.innerHTML='<p style="color:var(--text-muted);text-align:center;padding:40px;">找不到符合的商品</p>';
+      return;
+    }
+    let html='';
+    matchedProducts.forEach(p=>{
+      const allHistory=[];
+      (p.variants||[]).forEach(v=>{
+        const label=`${v.color||v.name||''}${v.size?' / '+v.size:''}`;
+        (v.stockHistory||[]).forEach(h=>{
+          if(typeFilter&&h.type!==typeFilter)return;
+          allHistory.push({...h,label,currentStock:v.stock??0});
+        });
+      });
+      if(!allHistory.length)return;
+      allHistory.sort((a,b)=>b.date.localeCompare(a.date));
+      html+=`<div class="card" style="margin-bottom:12px;">
+        <div class="card-header">
+          <span class="product-sku">${esc(p.sku||'')}</span>
+          <span style="font-weight:600;margin-left:8px;">${esc(p.name||'')}</span>
+          <span class="product-category-tag" style="margin-left:8px;">${esc(p.category||'')}</span>
+        </div>
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead><tr style="background:var(--bg-muted);">
+              <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);">日期</th>
+              <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);">顏色 / 尺寸</th>
+              <th style="padding:8px 12px;text-align:center;border-bottom:1px solid var(--border);">類型</th>
+              <th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);">數量</th>
+            </tr></thead>
+            <tbody>
+              ${allHistory.map(h=>`<tr>
+                <td style="padding:7px 12px;border-bottom:1px solid var(--border);color:var(--text-muted);">${h.date}</td>
+                <td style="padding:7px 12px;border-bottom:1px solid var(--border);">${esc(h.label)}</td>
+                <td style="padding:7px 12px;border-bottom:1px solid var(--border);text-align:center;">
+                  ${h.type==='in'
+                    ?'<span style="background:var(--success-light);color:var(--success);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▲ 入庫</span>'
+                    :'<span style="background:var(--danger-light);color:var(--danger);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▼ 出庫</span>'}
+                </td>
+                <td style="padding:7px 12px;border-bottom:1px solid var(--border);text-align:right;font-weight:600;${h.type==='in'?'color:var(--success)':'color:var(--danger)'};">
+                  ${h.type==='in'?'+':'-'}${h.qty}
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+    });
+    el.innerHTML=html||'<p style="color:var(--text-muted);text-align:center;padding:40px;">此商品尚無庫存歷史紀錄</p>';
+  };
+
   window.compilePurchaseList = function(){
     const map={};
     orders.forEach(o=>{
