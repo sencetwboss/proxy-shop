@@ -662,7 +662,7 @@ loadFirebase(() => {
     const used=new Set();
     products.filter(p=>p.category===cat).forEach(p=>{const n=parseInt((p.sku||'').slice(1));if(!isNaN(n))used.add(n);});
     db.collection('meta').doc('deletedSKUs').get().then(snap=>{
-      if(snap.exists)(snap.data()[prefix]||[]).forEach(s=>{const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);});
+      if(snap.exists())(snap.data()[prefix]||[]).forEach(s=>{const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);});
       let next=1;while(used.has(next))next++;
       document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
     }).catch(()=>{
@@ -792,7 +792,31 @@ loadFirebase(() => {
         .then(r=>r.json()).then(d=>d.secure_url||'');
     });
     Promise.all(uploadPromises).then(imageUrls=>{
-      const data={category,sku,vendor,name,variants,images:imageUrls,updatedAt:Date.now()};
+      const today=new Date().toISOString().slice(0,10);
+      // 修正2：新增時若有庫存量，寫入初始 stockHistory
+      const variantsWithHistory=variants.map(v=>{
+        if(isEdit){
+          // 編輯時保留原有歷史
+          const orig=(products.find(x=>x.id===isEdit)?.variants||[])
+            .find(ov=>(ov.color||ov.name||'')===v.color&&(ov.size||'')===(v.size||''));
+          const origHist=orig?.stockHistory||[];
+          const origStock=orig?.stock??0;
+          // 若庫存有變動，記錄差異
+          if(v.stock!==origStock){
+            const diff=v.stock-origStock;
+            const newHist=[...origHist,{date:today,type:diff>0?'in':'out',qty:Math.abs(diff)}];
+            return{...v,stockHistory:newHist};
+          }
+          return{...v,stockHistory:origHist};
+        } else {
+          // 新增時若庫存>0，記錄初始入庫
+          if((v.stock||0)>0){
+            return{...v,stockHistory:[{date:today,type:'in',qty:v.stock}]};
+          }
+          return{...v,stockHistory:[]};
+        }
+      });
+      const data={category,sku,vendor,name,variants:variantsWithHistory,images:imageUrls,updatedAt:Date.now()};
       if(isEdit){db.collection('products').doc(isEdit).update(data);}
       else{db.collection('products').add({...data,createdAt:Date.now()});}
     });
@@ -804,9 +828,9 @@ loadFirebase(() => {
     if(p.sku){
       const prefix=p.sku[0];
       db.collection('meta').doc('deletedSKUs').get().then(snap=>{
-        const ex=snap.exists?(snap.data()[prefix]||[]):[];
+        const ex=snap.exists()?(snap.data()[prefix]||[]):[];
         return db.collection('meta').doc('deletedSKUs').set({[prefix]:[...ex,p.sku]},{merge:true});
-      }).then(del);
+      }).then(del).catch(()=>del()); // 若 meta 失敗也要刪
     } else del();
   };
   window.openStockModal = function(pid){
@@ -922,7 +946,7 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
-    window._mergeFromOrderId=null;
+    window._mergeFromOrderId=null; // 開啟新訂單時才清除
     const mn=document.getElementById('merge-notice');if(mn)mn.style.display='none';
     const o=id?orders.find(x=>x.id===id):null;
     document.getElementById('order-modal-title').textContent=id?'編輯訂單':'新增訂單';
@@ -1163,25 +1187,25 @@ loadFirebase(() => {
       data.orderNo=`ORD-${ymd}-${String(cnt).padStart(3,'0')}`;data.createdAt=Date.now();
       return db.collection('orders').add(data).then(ref=>{
         editingOrderId=ref.id;
+        window._mergeFromOrderId=null;
         if(!silent)showToast('✅ 訂單已新增');
-        // 修正3：合併後確實刪除舊單
-        if(window._mergeFromOrderId){
-          const oldId=window._mergeFromOrderId;
-          window._mergeFromOrderId=null;
-          db.collection('orders').doc(oldId).delete().then(()=>{
-            showToast('✅ 已合併並刪除舊訂單');
-          });
-        }
       });
     }
   }
   window.saveOrder = function(){
     if(!document.getElementById('order-customer-id').value){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
-    // 立刻關閉視窗
-    closeOrderModal();
-    showToast('✅ 儲存中...');
-    doSaveOrder(false);
+    // 修正3：先儲存（保留 _mergeFromOrderId），儲存完再關閉
+    const mergeId=window._mergeFromOrderId; // 先備份，避免被清掉
+    doSaveOrder(false).then(()=>{
+      closeOrderModal();
+      // 若有合併，儲存完後刪舊單
+      if(mergeId){
+        db.collection('orders').doc(mergeId).delete().then(()=>{
+          showToast('✅ 已合併並刪除舊訂單');
+        });
+      }
+    });
   };
   window.deleteOrder = function(id){
     if(!confirm('確定刪除？'))return;
