@@ -1002,10 +1002,12 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
-    // 新增訂單時清掉 mergeId
-    const mergeInput=document.getElementById('merge-order-id-input');
-    if(mergeInput) mergeInput.value='';
-    _mergeOrderId=null;
+    // 只有真正新增訂單（無id）時才清掉 mergeId
+    if(!id){
+      const mergeInput=document.getElementById('merge-order-id-input');
+      if(mergeInput) mergeInput.value='';
+      _mergeOrderId=null;
+    }
     _savingOrder=false;
     const btn=document.getElementById('save-order-btn');
     if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
@@ -1079,8 +1081,12 @@ loadFirebase(() => {
     currentOrderItems=[...oldItems,...newItems];
     // 把 mergeId 存在隱藏 input，不用 JS 變數（避免被其他流程清掉）
     document.getElementById('merge-order-id-input').value=oldOrderId;
+    console.log('[MERGE] input set to:', document.getElementById('merge-order-id-input').value);
     notice.style.display='none';
-    renderOrderItems();calcOrderTotal();
+    renderOrderItems();
+    console.log('[MERGE] after renderOrderItems, input=', document.getElementById('merge-order-id-input').value);
+    calcOrderTotal();
+    console.log('[MERGE] after calcOrderTotal, input=', document.getElementById('merge-order-id-input').value);
     showToast('✅ 已載入舊單品項，可繼續追加');
   };
   window.cancelMerge = function(){
