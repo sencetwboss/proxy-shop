@@ -267,7 +267,11 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
       </div>
       <div class="form-row">
         <div class="form-group"><label>廠商（購買處）</label><input id="prod-vendor" placeholder="廠商名稱"></div>
-        <div class="form-group"><label>品名</label><input id="prod-name" placeholder="商品名稱"></div>
+        <div class="form-group">
+          <label>品名</label>
+          <input id="prod-name" placeholder="商品名稱" oninput="checkDupName()">
+          <div id="prod-name-warn" style="display:none;color:var(--danger);font-size:12px;margin-top:4px;padding:5px 8px;background:var(--danger-light);border-radius:4px;"></div>
+        </div>
       </div>
       <div class="form-group">
         <label>款式 / 顏色 → 尺寸</label>
@@ -664,6 +668,18 @@ loadFirebase(() => {
     if(el) el.style.display=el.style.display==='none'?'block':'none';
   };
   window.onCategoryChange = function(){if(!editingProductId)genSKU();};
+  window.checkDupName = function(){
+    const name=document.getElementById('prod-name').value.trim();
+    const warn=document.getElementById('prod-name-warn');
+    if(!name||!warn){if(warn)warn.style.display='none';return;}
+    const dup=products.find(p=>p.name===name&&p.id!==editingProductId);
+    if(dup){
+      warn.textContent=`⚠️ 品名「${name}」已存在（貨號：${dup.sku||'—'}）`;
+      warn.style.display='block';
+    } else {
+      warn.style.display='none';
+    }
+  };
   function genSKU(){
     const cat=document.getElementById('prod-category').value;
     if(!cat){document.getElementById('prod-sku').value='';return;}
@@ -672,9 +688,12 @@ loadFirebase(() => {
     products.filter(p=>p.category===cat).forEach(p=>{const n=parseInt((p.sku||'').slice(1));if(!isNaN(n))used.add(n);});
     db.collection('meta').doc('deletedSKUs').get().then(snap=>{
       if(snap.exists())(snap.data()[prefix]||[]).forEach(s=>{const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);});
+      // 修正2：也加入本地記錄的已刪除 SKU
+      (window._localDeletedSKUs||[]).forEach(s=>{if(s[0]===prefix){const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);}});
       let next=1;while(used.has(next))next++;
       document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
     }).catch(()=>{
+      (window._localDeletedSKUs||[]).forEach(s=>{if(s[0]===prefix){const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);}});
       let next=1;while(used.has(next))next++;
       document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
     });
@@ -841,10 +860,20 @@ loadFirebase(() => {
     const del=()=>db.collection('products').doc(id).delete().then(()=>showToast('🗑️ 已刪除'));
     if(p.sku){
       const prefix=p.sku[0];
+      // 修正2：先寫入 deletedSKUs，確保成功後再刪商品
       db.collection('meta').doc('deletedSKUs').get().then(snap=>{
         const ex=snap.exists()?(snap.data()[prefix]||[]):[];
-        return db.collection('meta').doc('deletedSKUs').set({[prefix]:[...ex,p.sku]},{merge:true});
-      }).then(del).catch(()=>del()); // 若 meta 失敗也要刪
+        if(!ex.includes(p.sku)){
+          return db.collection('meta').doc('deletedSKUs').set({[prefix]:[...ex,p.sku]},{merge:true});
+        }
+      }).then(()=>{
+        del();
+      }).catch(()=>{
+        // meta 失敗也繼續刪商品，但本地記錄已刪除的 sku
+        if(!window._localDeletedSKUs) window._localDeletedSKUs=[];
+        window._localDeletedSKUs.push(p.sku);
+        del();
+      });
     } else del();
   };
   window.openStockModal = function(pid){
