@@ -1243,25 +1243,24 @@ loadFirebase(() => {
     if(!document.getElementById('order-customer-id').value){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
     _savingOrder=true;
-    const btn=document.getElementById('save-order-btn');
-    if(btn){btn.disabled=true;btn.textContent='儲存中...';}
+    clearTimeout(autoSaveTimer); // 停止自動儲存，避免干擾
     const mergeId=window._mergeFromOrderId;
+    // 先關閉視窗，背景完成儲存
+    closeOrderModal();
+    showToast('💾 儲存中...');
     doSaveOrder(false).then(()=>{
       _savingOrder=false;
-      closeOrderModal(); // 修正3+5：儲存後關閉視窗
-      if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
-      // 修正4：合併後刪除原始訂單
+      showToast('✅ 儲存完成');
       if(mergeId){
         db.collection('orders').doc(mergeId).delete().then(()=>{
           showToast('✅ 已合併並刪除原始訂單');
         }).catch(()=>{
-          showToast('⚠️ 合併成功，但原始訂單刪除失敗，請手動刪除');
+          showToast('⚠️ 合併成功，但原始訂單請手動刪除');
         });
       }
     }).catch(()=>{
       _savingOrder=false;
-      if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
-      showToast('❌ 儲存失敗，請重試');
+      showToast('❌ 儲存失敗，請重新開啟訂單再試');
     });
   };
   window.deleteOrder = function(id){
