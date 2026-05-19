@@ -1009,6 +1009,7 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
+    window._orderSaving=false; // 重置儲存鎖
     // 只有真正新增訂單（無id）時才清掉 mergeId
     if(!id){
       const mergeInput=document.getElementById('merge-order-id-input');
@@ -1264,18 +1265,23 @@ loadFirebase(() => {
     }
   }
   window.saveOrder = function(){
+    // 防止重複儲存
+    if(window._orderSaving){showToast('⚠️ 請勿重複點擊');return;}
+    window._orderSaving=true;
+    setTimeout(()=>{window._orderSaving=false;},5000); // 5秒後自動解鎖
+
     const custId=document.getElementById('order-customer-id').value;
-    if(!custId){showToast('⚠️ 請選擇客戶');return;}
+    if(!custId){window._orderSaving=false;showToast('⚠️ 請選擇客戶');return;}
     clearTimeout(autoSaveTimer);
 
-    // ===== 合併邏輯：從 merge-notice 的 dataset 取得要刪除的舊單ID =====
+    // ===== 合併邏輯 =====
+    // 優先從 merge-notice dataset 取（合併提示還顯示中）
     let mergeId='';
     const mergeNotice=document.getElementById('merge-notice');
     if(mergeNotice&&mergeNotice.style.display!=='none'){
-      const pendingId=mergeNotice.dataset.orderId||'';
-      if(pendingId){
-        mergeId=pendingId;
-        const oldOrder=orders.find(x=>x.id===pendingId);
+      mergeId=mergeNotice.dataset.orderId||'';
+      if(mergeId){
+        const oldOrder=orders.find(x=>x.id===mergeId);
         if(oldOrder){
           const oldItems=(oldOrder.items||[]).map(i=>({...i,isOriginal:true}));
           const newItems=currentOrderItems.map(i=>({...i,isAdded:true}));
@@ -1284,13 +1290,13 @@ loadFirebase(() => {
         mergeNotice.style.display='none';
       }
     }
-    // 也從 hidden input 取（若已點過合併按鈕）
+    // 再從 hidden input 取（已點過合併按鈕的情況）
     if(!mergeId){
       mergeId=document.getElementById('merge-order-id-input')?.value||'';
     }
     document.getElementById('merge-order-id-input').value='';
 
-    if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
+    if(!currentOrderItems.length){window._orderSaving=false;showToast('⚠️ 請至少新增一個品項');return;}
 
     // ===== 收集表單資料 =====
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
@@ -1298,8 +1304,7 @@ loadFirebase(() => {
     const sf=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
     const theDate=document.getElementById('order-date').value;
     const orderData={
-      customerId:custId,
-      date:theDate,
+      customerId:custId,date:theDate,
       status:document.getElementById('order-status').value,
       shippingMethod:m,shippingFee:sf,
       coupon:Number(document.getElementById('order-coupon').value||0),
@@ -1311,35 +1316,33 @@ loadFirebase(() => {
       updatedAt:Date.now()
     };
 
-    // ===== 關閉視窗 =====
     closeOrderModal();
-    showToast('💾 儲存中...');
 
-    // ===== 若有合併，用 update 更新舊單（不新增）=====
+    // ===== 決定儲存方式 =====
     let savePromise;
     if(mergeId){
-      // 合併：把新品項更新到舊單上，然後刪除臨時的 editingOrderId
-      savePromise=db.collection('orders').doc(mergeId).update(orderData).then(()=>{
-        showToast('✅ 已合併訂單');
-      });
+      // 合併：直接更新舊單，不新增
+      savePromise=db.collection('orders').doc(mergeId).update(orderData)
+        .then(()=>showToast('✅ 已合併訂單'));
     } else if(editingOrderId){
-      savePromise=db.collection('orders').doc(editingOrderId).update(orderData).then(()=>{
-        showToast('✅ 訂單已更新');
-      });
+      // 編輯現有訂單
+      savePromise=db.collection('orders').doc(editingOrderId).update(orderData)
+        .then(()=>showToast('✅ 訂單已更新'));
     } else {
-      // 新增：產生不重複的訂單號碼
+      // 全新訂單：產生不重複號碼
       const ymd=theDate.replace(/-/g,'');
       const existingNos=orders.filter(o=>o.date===theDate).map(o=>o.orderNo||'');
       let cnt=1;
-      while(existingNos.includes('ORD-'+ymd+'-'+String(cnt).padStart(3,'0'))) cnt++;
+      while(existingNos.includes('ORD-'+ymd+'-'+String(cnt).padStart(3,'0')))cnt++;
       orderData.orderNo='ORD-'+ymd+'-'+String(cnt).padStart(3,'0');
       orderData.createdAt=Date.now();
-      savePromise=db.collection('orders').add(orderData).then(()=>{
-        showToast('✅ 訂單已新增');
-      });
+      savePromise=db.collection('orders').add(orderData)
+        .then(()=>showToast('✅ 訂單已新增'));
     }
 
-    savePromise.catch(()=>{showToast('❌ 儲存失敗，請重試');});
+    savePromise
+      .then(()=>{window._orderSaving=false;})
+      .catch(()=>{window._orderSaving=false;showToast('❌ 儲存失敗，請重試');});
   };
   window.deleteOrder = function(id){
     if(!confirm('確定刪除？'))return;
