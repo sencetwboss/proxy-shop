@@ -1257,9 +1257,11 @@ loadFirebase(() => {
     }
   }
   window.saveOrder = function(){
+    console.log('[SAVE] called, custId=', document.getElementById('order-customer-id').value, 'items=', currentOrderItems.length);
     const custId=document.getElementById('order-customer-id').value;
-    if(!custId){showToast('⚠️ 請選擇客戶');return;}
-    if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
+    if(!custId){showToast('⚠️ 請選擇客戶');console.log('[SAVE] blocked: no customer');return;}
+    if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');console.log('[SAVE] blocked: no items');return;}
+    console.log('[SAVE] proceeding...');
     clearTimeout(autoSaveTimer);
     // 若合併提示還顯示中（用戶還沒點合併），自動執行合併
     const mergeNotice=document.getElementById('merge-notice');
