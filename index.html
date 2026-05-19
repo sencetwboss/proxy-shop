@@ -83,7 +83,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .customer-info h4{font-size:15px;margin-bottom:4px;}
 .platform-tag{display:inline-block;padding:2px 8px;background:var(--accent-light);color:var(--accent);border-radius:20px;font-size:11px;font-weight:600;}
 .customer-actions,.product-actions{display:flex;gap:6px;margin-top:8px;}
-.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;}
+.product-grid{display:grid;grid-template-columns:1fr;gap:12px;}
 .product-card{}
 .product-sku{font-size:12px;color:var(--accent);font-weight:700;background:var(--accent-light);padding:2px 8px;border-radius:20px;}
 .product-category-tag{font-size:11px;color:var(--text-muted);}
@@ -630,11 +630,11 @@ loadFirebase(() => {
     const imgs=(p.images||[]).slice(0,4).map(url=>`<img src="${url}" onclick="window.open('${url}','_blank')">`).join('');
     const rows=(p.variants||[]).map((v,vi)=>{
       return `<tr>
-        <td style="padding:5px 8px;white-space:nowrap;">${esc(v.color||v.name||'')}</td>
-        <td style="padding:5px 8px;white-space:nowrap;">${esc(v.size||'-')}</td>
-        <td style="padding:5px 8px;text-align:right;white-space:nowrap;">${v.price!=null?'NT$ '+v.price:'-'}</td>
-        <td style="padding:5px 8px;text-align:right;white-space:nowrap;">${v.cost!=null?'NT$ '+v.cost:'-'}</td>
-        <td style="padding:5px 8px;text-align:right;white-space:nowrap;">
+        <td style="padding:5px 8px;">${esc(v.color||v.name||'')}</td>
+        <td style="padding:5px 8px;">${esc(v.size||'-')}</td>
+        <td style="padding:5px 8px;text-align:right;">${v.price!=null?'NT$ '+v.price:'-'}</td>
+        <td style="padding:5px 8px;text-align:right;">${v.cost!=null?'NT$ '+v.cost:'-'}</td>
+        <td style="padding:5px 8px;text-align:right;">
           <span style="${(v.stock||0)<=3?'color:var(--danger);font-weight:700;':''}">${v.stock??0}</span>
         </td>
       </tr>`;
@@ -645,14 +645,15 @@ loadFirebase(() => {
       <div class="card-body">
         ${imgs?`<div class="product-images">${imgs}</div>`:''}
         <div style="font-weight:600;margin-bottom:4px;">${esc(p.name||'（未命名）')}</div>
-        ${p.variants?.length?`<div style="overflow-x:auto;margin-top:6px;"><table style="width:100%;min-width:300px;font-size:12px;border-collapse:collapse;">
+        ${p.variants?.length?`<table style="width:100%;font-size:12px;border-collapse:collapse;margin-top:6px;table-layout:fixed;">
+          <colgroup><col style="width:30%"><col style="width:14%"><col style="width:20%"><col style="width:20%"><col style="width:16%"></colgroup>
           <thead><tr style="background:var(--bg-muted);">
-            <th style="padding:5px 8px;text-align:left;white-space:nowrap;">顏色/款式</th>
-            <th style="padding:5px 8px;text-align:left;white-space:nowrap;">尺寸</th>
-            <th style="padding:5px 8px;text-align:right;white-space:nowrap;">售價</th>
-            <th style="padding:5px 8px;text-align:right;white-space:nowrap;">成本</th>
-            <th style="padding:5px 8px;text-align:right;white-space:nowrap;">庫存</th>
-          </tr></thead><tbody>${rows}</tbody></table></div>
+            <th style="padding:5px 8px;text-align:left;">顏色/款式</th>
+            <th style="padding:5px 8px;text-align:left;">尺寸</th>
+            <th style="padding:5px 8px;text-align:right;">售價</th>
+            <th style="padding:5px 8px;text-align:right;">成本</th>
+            <th style="padding:5px 8px;text-align:right;">庫存</th>
+          </tr></thead><tbody>${rows}</tbody></table>
           <div style="font-size:12px;color:var(--text-muted);margin-top:4px;">總庫存：${total} 件</div>`:'<div style="font-size:12px;color:var(--text-muted);">尚未設定款式</div>'}
         <div class="product-actions">
           <button class="btn outline small" onclick="openProductModal('${p.id}')">✏️ 編輯</button>
