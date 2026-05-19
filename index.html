@@ -1051,7 +1051,7 @@ loadFirebase(() => {
         document.getElementById('merge-notice').style.display='none';
       }
     }
-    triggerAutoSave();
+    // 不在選客戶時觸發 autoSave，避免提早建立訂單干擾合併流程
   };
   window.doMergeOrder = function(){
     const notice=document.getElementById('merge-notice');
@@ -1210,7 +1210,6 @@ loadFirebase(() => {
     document.getElementById('display-shipping').textContent='NT$ '+ship.toLocaleString();
     document.getElementById('display-discount').textContent='− NT$ '+(c+cr+pr).toLocaleString();
     document.getElementById('display-total').textContent='NT$ '+(sub+ship-c-cr-pr).toLocaleString();
-    triggerAutoSave();
   };
   function doSaveOrder(silent){
     const custId=document.getElementById('order-customer-id').value;
@@ -1245,8 +1244,9 @@ loadFirebase(() => {
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
     _savingOrder=true;
     clearTimeout(autoSaveTimer);
-    // 先收集所有 DOM 資料（關閉視窗前）
-    const mergeId=window._mergeFromOrderId;
+    // 先備份 mergeId（必須在任何 close/reset 之前）
+    const mergeId=window._mergeFromOrderId||null;
+    window._mergeFromOrderId=null; // 立刻清掉避免重複刪除
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
     const m=document.getElementById('order-shipping-method').value;
     const sf=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
