@@ -990,8 +990,9 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
+    console.log('[OPEN_ORDER] clearing _mergeOrderId');
     _mergeOrderId=null;
-    _savingOrder=false; // 重置儲存鎖
+    _savingOrder=false;
     const btn=document.getElementById('save-order-btn');
     if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
     const mn=document.getElementById('merge-notice');if(mn)mn.style.display='none';
@@ -1063,6 +1064,7 @@ loadFirebase(() => {
     const newItems=currentOrderItems.map(i=>({...i,isAdded:true}));
     currentOrderItems=[...oldItems,...newItems];
     _mergeOrderId=oldOrderId;
+    console.log('[MERGE] _mergeOrderId set to:', _mergeOrderId);
     notice.style.display='none';
     renderOrderItems();calcOrderTotal();
     showToast('✅ 已載入舊單品項（舊單ID：'+oldOrderId.slice(0,6)+'）');
@@ -1242,8 +1244,10 @@ loadFirebase(() => {
     _savingOrder=true;
     clearTimeout(autoSaveTimer);
     // 先備份 mergeId
+    console.log('[SAVE] _mergeOrderId at saveOrder:', _mergeOrderId);
     const mergeId=_mergeOrderId||null;
     _mergeOrderId=null;
+    console.log('[SAVE] mergeId captured:', mergeId);
     if(mergeId){showToast('🔍 偵測到合併訂單：'+mergeId.slice(0,6),3000);}
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
     const m=document.getElementById('order-shipping-method').value;
