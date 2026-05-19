@@ -1251,11 +1251,12 @@ loadFirebase(() => {
     }
   }
   window.saveOrder = function(){
-    if(_savingOrder){showToast('⚠️ 儲存中，請勿重複點擊');return;}
+    console.log('[SAVE] saveOrder called, _savingOrder=', _savingOrder);
+    // 強制重置 _savingOrder 避免卡住
+    _savingOrder=false;
     const custId=document.getElementById('order-customer-id').value;
     if(!custId){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
-    _savingOrder=true;
     clearTimeout(autoSaveTimer);
     // 先備份 mergeId
     const mergeId=document.getElementById('merge-order-id-input')?.value||'';
