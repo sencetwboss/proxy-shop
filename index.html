@@ -1257,17 +1257,21 @@ loadFirebase(() => {
     }
   }
   window.saveOrder = function(){
-    console.log('[SAVE] saveOrder called, _savingOrder=', _savingOrder);
-    // 強制重置 _savingOrder 避免卡住
-    _savingOrder=false;
     const custId=document.getElementById('order-customer-id').value;
     if(!custId){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
     clearTimeout(autoSaveTimer);
-    // 先備份 mergeId
+    // 若合併提示還顯示中（用戶還沒點合併），自動執行合併
+    const mergeNotice=document.getElementById('merge-notice');
+    if(mergeNotice&&mergeNotice.style.display!=='none'){
+      const pendingId=mergeNotice.dataset.orderId||'';
+      if(pendingId){
+        doMergeOrder(); // 自動執行合併
+      }
+    }
+    // 備份 mergeId
     const mergeId=document.getElementById('merge-order-id-input')?.value||'';
     document.getElementById('merge-order-id-input').value='';
-    console.log('[SAVE] mergeId from DOM:', mergeId);
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
     const m=document.getElementById('order-shipping-method').value;
     const sf=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
