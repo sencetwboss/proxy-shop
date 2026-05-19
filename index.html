@@ -358,7 +358,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     </div>
     <div class="modal-footer">
       <button class="btn outline" onclick="closeOrderModal()">取消</button>
-      <button class="btn primary" id="save-order-btn" onclick="console.log('BTN CLICKED');if(typeof saveOrder==='function'){saveOrder();}else{alert('saveOrder not found');}">💾 儲存訂單</button>
+      <button class="btn primary" id="save-order-btn" onclick="saveOrder()">💾 儲存訂單</button>
       <button class="btn success hidden" id="btn-download-order" onclick="downloadOrderImage()">🖼️ 圖片</button>
       <button class="btn success hidden" id="btn-download-pdf" onclick="downloadOrderPDF()">📄 PDF</button>
     </div>
@@ -1257,20 +1257,26 @@ loadFirebase(() => {
     }
   }
   window.saveOrder = function(){
-    console.log('[SAVE] called, custId=', document.getElementById('order-customer-id').value, 'items=', currentOrderItems.length);
     const custId=document.getElementById('order-customer-id').value;
-    if(!custId){showToast('⚠️ 請選擇客戶');console.log('[SAVE] blocked: no customer');return;}
-    if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');console.log('[SAVE] blocked: no items');return;}
-    console.log('[SAVE] proceeding...');
+    if(!custId){showToast('⚠️ 請選擇客戶');return;}
     clearTimeout(autoSaveTimer);
-    // 若合併提示還顯示中（用戶還沒點合併），自動執行合併
+    // 若合併提示還顯示中，先同步執行合併
     const mergeNotice=document.getElementById('merge-notice');
     if(mergeNotice&&mergeNotice.style.display!=='none'){
       const pendingId=mergeNotice.dataset.orderId||'';
       if(pendingId){
-        doMergeOrder(); // 自動執行合併
+        // 直接在這裡執行合併邏輯（不呼叫 doMergeOrder 避免非同步問題）
+        const oldOrder=orders.find(x=>x.id===pendingId);
+        if(oldOrder){
+          const oldItems=(oldOrder.items||[]).map(i=>({...i,isOriginal:true}));
+          const newItems=currentOrderItems.map(i=>({...i,isAdded:true}));
+          currentOrderItems=[...oldItems,...newItems];
+          document.getElementById('merge-order-id-input').value=pendingId;
+        }
+        mergeNotice.style.display='none';
       }
     }
+    if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
     // 備份 mergeId
     const mergeId=document.getElementById('merge-order-id-input')?.value||'';
     document.getElementById('merge-order-id-input').value='';
