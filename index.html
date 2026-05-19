@@ -1240,27 +1240,57 @@ loadFirebase(() => {
   }
   window.saveOrder = function(){
     if(_savingOrder){showToast('⚠️ 儲存中，請勿重複點擊');return;}
-    if(!document.getElementById('order-customer-id').value){showToast('⚠️ 請選擇客戶');return;}
+    const custId=document.getElementById('order-customer-id').value;
+    if(!custId){showToast('⚠️ 請選擇客戶');return;}
     if(!currentOrderItems.length){showToast('⚠️ 請至少新增一個品項');return;}
     _savingOrder=true;
-    clearTimeout(autoSaveTimer); // 停止自動儲存，避免干擾
+    clearTimeout(autoSaveTimer);
+    // 先收集所有 DOM 資料（關閉視窗前）
     const mergeId=window._mergeFromOrderId;
-    // 先關閉視窗，背景完成儲存
+    const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
+    const m=document.getElementById('order-shipping-method').value;
+    const sf=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
+    const orderData={
+      customerId:custId,
+      date:document.getElementById('order-date').value,
+      status:document.getElementById('order-status').value,
+      shippingMethod:m,shippingFee:sf,
+      coupon:Number(document.getElementById('order-coupon').value||0),
+      credit:Number(document.getElementById('order-credit').value||0),
+      prepaid:Number(document.getElementById('order-prepaid').value||0),
+      deposit:document.getElementById('order-deposit').checked,
+      balance:document.getElementById('order-balance').checked,
+      items:JSON.parse(JSON.stringify(currentOrderItems)),
+      updatedAt:Date.now()
+    };
+    // 關閉視窗
     closeOrderModal();
     showToast('💾 儲存中...');
-    doSaveOrder(false).then(()=>{
+    // 直接用收集好的資料寫入 Firebase（不依賴 DOM）
+    let savePromise;
+    if(editingOrderId){
+      savePromise=db.collection('orders').doc(editingOrderId).update(orderData);
+    } else {
+      const ymd=orderData.date.replace(/-/g,'');
+      const cnt=orders.filter(o=>o.date===orderData.date).length+1;
+      orderData.orderNo=`ORD-${ymd}-${String(cnt).padStart(3,'0')}`;
+      orderData.createdAt=Date.now();
+      savePromise=db.collection('orders').add(orderData).then(ref=>{editingOrderId=ref.id;});
+    }
+    savePromise.then(()=>{
       _savingOrder=false;
       showToast('✅ 儲存完成');
+      // 合併後刪除原始訂單
       if(mergeId){
         db.collection('orders').doc(mergeId).delete().then(()=>{
           showToast('✅ 已合併並刪除原始訂單');
         }).catch(()=>{
-          showToast('⚠️ 合併成功，但原始訂單請手動刪除');
+          showToast('⚠️ 原始訂單請手動刪除');
         });
       }
     }).catch(()=>{
       _savingOrder=false;
-      showToast('❌ 儲存失敗，請重新開啟訂單再試');
+      showToast('❌ 儲存失敗，請重試');
     });
   };
   window.deleteOrder = function(id){
