@@ -358,7 +358,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     </div>
     <div class="modal-footer">
       <button class="btn outline" onclick="closeOrderModal()">取消</button>
-      <button class="btn primary" id="save-order-btn" onclick="saveOrder()">💾 儲存訂單</button>
+      <button class="btn primary" id="save-order-btn" onclick="console.log('BTN CLICKED');if(typeof saveOrder==='function'){saveOrder();}else{alert('saveOrder not found');}">💾 儲存訂單</button>
       <button class="btn success hidden" id="btn-download-order" onclick="downloadOrderImage()">🖼️ 圖片</button>
       <button class="btn success hidden" id="btn-download-pdf" onclick="downloadOrderPDF()">📄 PDF</button>
     </div>
