@@ -453,6 +453,7 @@ loadFirebase(() => {
   let tempProductImages=[], currentOrderItems=[];
   let autoSaveTimer=null, stockUpdateProductId=null;
   let _savingOrder=false;
+  let _mergeOrderId=null; // 合併訂單時要刪除的舊單ID
 
   // ===== Auth =====
   let appInited = false;
@@ -989,7 +990,7 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
-    window._mergeFromOrderId=null;
+    _mergeOrderId=null;
     _savingOrder=false; // 重置儲存鎖
     const btn=document.getElementById('save-order-btn');
     if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
@@ -1061,14 +1062,14 @@ loadFirebase(() => {
     const oldItems=(oldOrder.items||[]).map(i=>({...i,isOriginal:true}));
     const newItems=currentOrderItems.map(i=>({...i,isAdded:true}));
     currentOrderItems=[...oldItems,...newItems];
-    window._mergeFromOrderId=oldOrderId;
+    _mergeOrderId=oldOrderId;
     notice.style.display='none';
     renderOrderItems();calcOrderTotal();
     showToast('✅ 已載入舊單品項（舊單ID：'+oldOrderId.slice(0,6)+'）');
   };
   window.cancelMerge = function(){
     document.getElementById('merge-notice').style.display='none';
-    window._mergeFromOrderId=null;
+    _mergeOrderId=null;
   };
   window.filterOrderProductDropdown = function(){
     const q=(document.getElementById('order-item-search')?.value||'').toLowerCase();
@@ -1228,7 +1229,7 @@ loadFirebase(() => {
       data.orderNo=`ORD-${ymd}-${String(cnt).padStart(3,'0')}`;data.createdAt=Date.now();
       return db.collection('orders').add(data).then(ref=>{
         editingOrderId=ref.id;
-        window._mergeFromOrderId=null;
+        _mergeOrderId=null;
         if(!silent)showToast('✅ 訂單已新增');
       });
     }
@@ -1241,8 +1242,8 @@ loadFirebase(() => {
     _savingOrder=true;
     clearTimeout(autoSaveTimer);
     // 先備份 mergeId
-    const mergeId=window._mergeFromOrderId||null;
-    window._mergeFromOrderId=null;
+    const mergeId=_mergeOrderId||null;
+    _mergeOrderId=null;
     if(mergeId){showToast('🔍 偵測到合併訂單：'+mergeId.slice(0,6),3000);}
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
     const m=document.getElementById('order-shipping-method').value;
