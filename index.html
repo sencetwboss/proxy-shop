@@ -513,10 +513,21 @@ loadFirebase(() => {
   function initApp() {
     db.collection('customers').onSnapshot(snap=>{customers=snap.docs.map(d=>({id:d.id,...d.data()}));renderCustomers();});
     db.collection('products').onSnapshot(snap=>{products=snap.docs.map(d=>({id:d.id,...d.data()}));renderProducts();});
-    db.collection('orders').orderBy('createdAt','desc').onSnapshot(snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();}).catch(()=>{
-      // 若 createdAt index 還沒建立，先用 date 排序
-      db.collection('orders').orderBy('date','desc').onSnapshot(snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();});
-    });
+    // 用 createdAt 排序，若索引未建立則改用 date
+    try {
+      db.collection('orders').orderBy('createdAt','desc').onSnapshot(
+        snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();},
+        ()=>{
+          db.collection('orders').orderBy('date','desc').onSnapshot(
+            snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();}
+          );
+        }
+      );
+    } catch(e) {
+      db.collection('orders').orderBy('date','desc').onSnapshot(
+        snap=>{orders=snap.docs.map(d=>({id:d.id,...d.data()}));renderOrders();}
+      );
+    }
     scheduleAutoAllot();
     switchPage('customers',document.querySelector('.nav-item'));
   }
@@ -990,8 +1001,13 @@ loadFirebase(() => {
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
-    console.log('[OPEN_ORDER] clearing _mergeOrderId');
-    _mergeOrderId=null;
+    // 只有新增訂單時才清 _mergeOrderId，編輯既有訂單時不清
+    if(!id) {
+      console.log('[OPEN_ORDER] clearing _mergeOrderId (new order)');
+      _mergeOrderId=null;
+    } else {
+      console.log('[OPEN_ORDER] editing existing order, keep _mergeOrderId:', _mergeOrderId);
+    }
     _savingOrder=false;
     const btn=document.getElementById('save-order-btn');
     if(btn){btn.disabled=false;btn.textContent='💾 儲存訂單';}
