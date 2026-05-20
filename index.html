@@ -884,8 +884,19 @@ loadFirebase(() => {
     });
   };
   window.deleteProduct = function(id){
-    if(!confirm('確定刪除此商品？'))return;
     const p=products.find(x=>x.id===id);if(!p)return;
+    // 檢查是否有進行中的訂單使用此商品
+    const activeStatus=['採買中','待匯款','待寄出'];
+    const usingOrders=orders.filter(o=>
+      activeStatus.includes(o.status||'採買中')&&
+      (o.items||[]).some(item=>item.productId===id)
+    );
+    if(usingOrders.length>0){
+      const orderNos=usingOrders.map(o=>o.orderNo||o.id.slice(0,8)).join('、');
+      showToast('⚠️ 此商品有進行中的訂單（'+orderNos+'），無法刪除');
+      return;
+    }
+    if(!confirm('確定刪除「'+(p.name||p.sku)+'」？刪除後貨號不可再使用'))return;
     const del=()=>db.collection('products').doc(id).delete().then(()=>showToast('🗑️ 已刪除'));
     if(p.sku){
       const prefix=p.sku[0];
