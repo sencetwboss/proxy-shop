@@ -1151,7 +1151,12 @@ loadFirebase(() => {
   window.quickAdd = function(pid){document.getElementById('order-product-dropdown').classList.add('hidden');document.getElementById('order-item-search').value='';addToOrder(pid);};
   function addToOrder(pid){
     const p=products.find(x=>x.id===pid);if(!p)return;
-    currentOrderItems.push({productId:p.id,sku:p.sku||'',productName:p.name||'',priceSnapshot:p.variants?.[0]?.price??0,color:'',variant:'',size:'',qty:1,allotted:0,goodsStatus:'採買中'});
+    // 預設帶入第一個顏色和尺寸，讓庫存即時顯示
+    const firstVariant=p.variants?.[0];
+    const defaultColor=firstVariant?.color||firstVariant?.name||'';
+    const defaultSize=firstVariant?.size||'';
+    const defaultPrice=firstVariant?.price??0;
+    currentOrderItems.push({productId:p.id,sku:p.sku||'',productName:p.name||'',priceSnapshot:defaultPrice,color:defaultColor,variant:defaultColor,size:defaultSize,qty:1,allotted:0,goodsStatus:'採買中'});
     renderOrderItems();calcOrderTotal();
   }
   window.addOrderItemByCategory = function(cat){
@@ -1263,6 +1268,10 @@ loadFirebase(() => {
       const s=(currentOrderItems[idx].qty||1)*(currentOrderItems[idx].priceSnapshot||0);
       const el=document.getElementById('sub-'+idx);if(el)el.textContent='NT$ '+s.toLocaleString();
       calcOrderTotal();
+    }
+    // 尺寸變動時重新渲染，讓目前庫存即時更新
+    if(field==='size'||field==='color'){
+      renderOrderItems();
     }
     triggerAutoSave();
   };
