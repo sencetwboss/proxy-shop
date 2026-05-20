@@ -656,8 +656,11 @@ loadFirebase(() => {
   };
   function productCardHtml(p){
     const imgs=(p.images||[]).slice(0,4).map(url=>`<img src="${url}" onclick="window.open('${url}','_blank')">`).join('');
+    // 修正2：條碼 = 貨號-款式序號（A01-01, A01-02...）
     const rows=(p.variants||[]).map((v,vi)=>{
+      const barcode=(p.sku||'')+'-'+String(vi+1).padStart(2,'0');
       return `<tr>
+        <td style="padding:3px 6px;white-space:nowrap;font-size:10px;color:var(--text-muted);">${esc(barcode)}</td>
         <td style="padding:3px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(v.color||v.name||'')}</td>
         <td style="padding:3px 6px;white-space:nowrap;">${esc(v.size||'-')}</td>
         <td style="padding:3px 6px;text-align:right;">${v.price!=null?'NT$'+v.price:'-'}</td>
@@ -672,10 +675,12 @@ loadFirebase(() => {
       <div class="card-header"><span class="product-sku">${esc(p.sku||'')}</span><span class="product-category-tag">${esc(p.category||'')}</span></div>
       <div class="card-body">
         ${imgs?`<div class="product-images">${imgs}</div>`:''}
-        <div style="font-weight:600;margin-bottom:4px;">${esc(p.name||'（未命名）')}</div>
-        ${p.variants?.length?`<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:6px;table-layout:fixed;">
-          <colgroup><col style="width:22%"><col style="width:13%"><col style="width:24%"><col style="width:24%"><col style="width:17%"></colgroup>
+        <div style="font-weight:600;margin-bottom:2px;">${esc(p.name||'（未命名）')}</div>
+        ${p.vendor?`<div style="font-size:11px;color:var(--text-muted);margin-bottom:4px;">廠商：${esc(p.vendor)}</div>`:''}
+        ${p.variants?.length?`<table style="width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;table-layout:fixed;">
+          <colgroup><col style="width:14%"><col style="width:20%"><col style="width:12%"><col style="width:20%"><col style="width:20%"><col style="width:14%"></colgroup>
           <thead><tr style="background:var(--bg-muted);">
+            <th style="padding:4px 6px;text-align:left;white-space:nowrap;">條碼</th>
             <th style="padding:4px 6px;text-align:left;white-space:nowrap;">顏色/款式</th>
             <th style="padding:4px 6px;text-align:left;white-space:nowrap;">尺寸</th>
             <th style="padding:4px 6px;text-align:right;white-space:nowrap;">售價</th>
@@ -1199,7 +1204,7 @@ loadFirebase(() => {
             </select>
           </div>
         </div>
-        ${curStock>0||item.allotted>0?`<div style="font-size:11px;color:var(--text-muted);margin-top:4px;">目前庫存：${curStock} 件</div>`:''}
+        <div style="font-size:11px;margin-top:4px;${curStock===0?'color:var(--danger);':'color:var(--text-muted);'}">目前庫存：${curStock} 件${curStock===0?' ⚠️ 庫存不足':''}</div>
       </div>`;
     }).join('');
   }
