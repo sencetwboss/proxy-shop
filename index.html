@@ -1306,19 +1306,18 @@ loadFirebase(() => {
     document.getElementById('merge-order-id-input').value='';
 
     if(!currentOrderItems.length){window._orderSaving=false;showToast('⚠️ 請至少新增一個品項');return;}
-    // 修正3：同一筆訂單中，同商品+同顏色+同尺寸不可重複
-    const itemKeys=[];
-    let dupItem=null;
-    for(const item of currentOrderItems){
+    // 修正3：同一筆訂單中，同商品+同顏色+同尺寸自動合併數量（不擋住合併訂單流程）
+    const itemMap={};
+    currentOrderItems.forEach(item=>{
       const key=item.productId+'|'+(item.color||item.variant||'')+'|'+(item.size||'');
-      if(itemKeys.includes(key)){dupItem=item;break;}
-      itemKeys.push(key);
-    }
-    if(dupItem){
-      window._orderSaving=false;
-      showToast('⚠️ 「'+(dupItem.productName||'')+' '+(dupItem.color||dupItem.variant||'')+'」重複，請合併數量');
-      return;
-    }
+      if(itemMap[key]){
+        itemMap[key].qty+=(item.qty||1);
+        itemMap[key].allotted+=(item.allotted||0);
+      } else {
+        itemMap[key]={...item};
+      }
+    });
+    currentOrderItems=Object.values(itemMap);
 
     // ===== 收集表單資料 =====
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
