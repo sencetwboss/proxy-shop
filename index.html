@@ -224,12 +224,16 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     <div id="page-stockhistory" class="page hidden">
       <div class="page-header"><h2>歷史庫存查詢</h2></div>
       <div class="filter-bar">
-        <input id="sh-search" placeholder="輸入貨號或品名搜尋..." oninput="renderStockHistory()" style="flex:2;">
-        <select id="sh-type" onchange="renderStockHistory()">
+        <input id="sh-search" placeholder="輸入貨號或品名搜尋..." style="flex:2;">
+        <select id="sh-type">
           <option value="">全部類型</option>
           <option value="in">入庫</option>
           <option value="out">出庫（配貨）</option>
         </select>
+        <input type="date" id="sh-date-from" placeholder="開始日期">
+        <span>～</span>
+        <input type="date" id="sh-date-to" placeholder="結束日期">
+        <button class="btn primary" onclick="renderStockHistory()">🔍 更新</button>
       </div>
       <div id="stockhistory-list"></div>
     </div>
@@ -1442,62 +1446,96 @@ loadFirebase(() => {
   window.renderStockHistory = function(){
     const search=(document.getElementById('sh-search')?.value||'').toLowerCase();
     const typeFilter=document.getElementById('sh-type')?.value||'';
+    const dateFrom=document.getElementById('sh-date-from')?.value||'';
+    const dateTo=document.getElementById('sh-date-to')?.value||'';
     const el=document.getElementById('stockhistory-list');if(!el)return;
-    if(!search&&!typeFilter){
-      el.innerHTML='<p style="color:var(--text-muted);text-align:center;padding:40px;">請輸入貨號或品名搜尋</p>';
+    if(!search){
+      el.innerHTML='<p style="color:var(--text-muted);text-align:center;padding:40px;">請輸入貨號或品名搜尋後按「🔍 更新」</p>';
       return;
     }
-    // 收集所有符合條件的商品歷史
     const matchedProducts=products.filter(p=>
-      !search||p.sku?.toLowerCase().includes(search)||p.name?.toLowerCase().includes(search)
+      p.sku?.toLowerCase().includes(search)||p.name?.toLowerCase().includes(search)
     );
     if(!matchedProducts.length){
       el.innerHTML='<p style="color:var(--text-muted);text-align:center;padding:40px;">找不到符合的商品</p>';
       return;
     }
+    // 建立訂單查詢：出庫紀錄找對應客戶
+    // 用出庫日期和數量比對訂單配貨紀錄
+    function findCustomerForOutStock(productId, colorLabel, date, qty){
+      for(const o of orders){
+        const cust=customers.find(c=>c.id===o.customerId);
+        for(const item of (o.items||[])){
+          if(item.productId!==productId) continue;
+          const itemLabel=(item.color||item.variant||'')+(item.size?'/'+item.size:'');
+          if(itemLabel!==colorLabel) continue;
+          if((item.allotted||0)===qty) return cust?.name||'';
+        }
+      }
+      return '';
+    }
     let html='';
     matchedProducts.forEach(p=>{
       const allHistory=[];
       (p.variants||[]).forEach(v=>{
-        const label=`${v.color||v.name||''}${v.size?' / '+v.size:''}`;
+        const label=(v.color||v.name||'')+(v.size?' / '+v.size:'');
+        const labelShort=(v.color||v.name||'')+(v.size?'/'+v.size:'');
         (v.stockHistory||[]).forEach(h=>{
           if(typeFilter&&h.type!==typeFilter)return;
-          allHistory.push({...h,label,currentStock:v.stock??0});
+          if(dateFrom&&h.date<dateFrom)return;
+          if(dateTo&&h.date>dateTo)return;
+          // 1. 客戶名稱（出庫時查詢）
+          const custName=h.type==='out'?(h.custName||findCustomerForOutStock(p.id,labelShort,h.date,h.qty)):'';
+          allHistory.push({...h,label,currentStock:v.stock??0,custName});
         });
       });
       if(!allHistory.length)return;
       allHistory.sort((a,b)=>b.date.localeCompare(a.date));
-      html+=`<div class="card" style="margin-bottom:12px;">
-        <div class="card-header">
-          <span class="product-sku">${esc(p.sku||'')}</span>
-          <span style="font-weight:600;margin-left:8px;">${esc(p.name||'')}</span>
-          <span class="product-category-tag" style="margin-left:8px;">${esc(p.category||'')}</span>
-        </div>
-        <div style="overflow-x:auto;">
-          <table style="width:100%;border-collapse:collapse;font-size:13px;">
-            <thead><tr style="background:var(--bg-muted);">
-              <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);">日期</th>
-              <th style="padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);">顏色 / 尺寸</th>
-              <th style="padding:8px 12px;text-align:center;border-bottom:1px solid var(--border);">類型</th>
-              <th style="padding:8px 12px;text-align:right;border-bottom:1px solid var(--border);">數量</th>
-            </tr></thead>
-            <tbody>
-              ${allHistory.map(h=>`<tr>
-                <td style="padding:7px 12px;border-bottom:1px solid var(--border);color:var(--text-muted);">${h.date}</td>
-                <td style="padding:7px 12px;border-bottom:1px solid var(--border);">${esc(h.label)}</td>
-                <td style="padding:7px 12px;border-bottom:1px solid var(--border);text-align:center;">
-                  ${h.type==='in'
-                    ?'<span style="background:var(--success-light);color:var(--success);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▲ 入庫</span>'
-                    :'<span style="background:var(--danger-light);color:var(--danger);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▼ 出庫</span>'}
-                </td>
-                <td style="padding:7px 12px;border-bottom:1px solid var(--border);text-align:right;font-weight:600;${h.type==='in'?'color:var(--success)':'color:var(--danger)'};">
-                  ${h.type==='in'?'+':'-'}${h.qty}
-                </td>
-              </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
+      // 計算累積庫存（從最舊到最新）
+      const sorted=[...allHistory].sort((a,b)=>a.date.localeCompare(b.date));
+      let runningStock=0;
+      // 先算最舊前的基礎庫存
+      const currentTotal=(p.variants||[]).reduce((s,v)=>s+(v.stock||0),0);
+      const totalChange=allHistory.reduce((s,h)=>s+(h.type==='in'?h.qty:-h.qty),0);
+      runningStock=currentTotal-totalChange;
+      const stockMap={};
+      sorted.forEach((h,i)=>{
+        runningStock+=h.type==='in'?h.qty:-h.qty;
+        stockMap[h.date+'_'+h.label+'_'+i]=runningStock;
+      });
+      html+='<div class="card" style="margin-bottom:12px;">';
+      html+='<div class="card-header">';
+      html+='<span class="product-sku">'+esc(p.sku||'')+'</span>';
+      html+='<span style="font-weight:600;margin-left:8px;">'+esc(p.name||'')+'</span>';
+      html+='<span class="product-category-tag" style="margin-left:8px;">'+esc(p.category||'')+'</span>';
+      html+='<span style="margin-left:auto;font-size:12px;color:var(--text-muted);">現有總庫存：'+(p.variants||[]).reduce((s,v)=>s+(v.stock||0),0)+' 件</span>';
+      html+='</div>';
+      html+='<div style="overflow-x:auto;">';
+      html+='<table style="width:100%;border-collapse:collapse;font-size:13px;">';
+      html+='<thead><tr style="background:var(--bg-muted);">';
+      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">日期</th>';
+      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">客戶</th>';
+      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">顏色/尺寸</th>';
+      html+='<th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap;">類型</th>';
+      html+='<th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;">數量</th>';
+      html+='<th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;">目前庫存</th>';
+      html+='</tr></thead><tbody>';
+      allHistory.forEach((h,i)=>{
+        const si=sorted.findIndex((s,si2)=>s===h);
+        const stockAfter=stockMap[h.date+'_'+h.label+'_'+sorted.indexOf(h)]??'';
+        html+='<tr>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);white-space:nowrap;">'+h.date+'</td>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);">'+esc(h.custName||'-')+'</td>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);">'+esc(h.label)+'</td>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);text-align:center;">';
+        if(h.type==='in') html+='<span style="background:var(--success-light);color:var(--success);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▲ 入庫</span>';
+        else html+='<span style="background:var(--danger-light);color:var(--danger);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▼ 出庫</span>';
+        html+='</td>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:600;'+(h.type==='in'?'color:var(--success)':'color:var(--danger)')+';">'+(h.type==='in'?'+':'-')+h.qty+'</td>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);text-align:right;font-weight:600;">'+h.currentStock+'</td>';
+        html+='</tr>';
+      });
+      html+='</tbody></table></div></div>';
     });
     el.innerHTML=html||'<p style="color:var(--text-muted);text-align:center;padding:40px;">此商品尚無庫存歷史紀錄</p>';
   };
