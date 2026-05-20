@@ -1033,8 +1033,17 @@ loadFirebase(() => {
   }
   function getStock(pid,color,size){
     const p=products.find(x=>x.id===pid);if(!p?.variants?.length)return 0;
-    const v=p.variants.find(x=>(x.color||x.name||'')===color&&(x.size||'')===(size||''));
-    return v?.stock??0;
+    // 先找精確的 顏色+尺寸
+    const exact=p.variants.find(x=>(x.color||x.name||'')===color&&(x.size||'')===(size||''));
+    if(exact) return exact.stock??0;
+    // 尺寸還未選時，顯示該顏色所有款式的庫存總和
+    if(color&&!size){
+      const colorVariants=p.variants.filter(x=>(x.color||x.name||'')===color);
+      if(colorVariants.length) return colorVariants.reduce((s,v)=>s+(v.stock||0),0);
+    }
+    // 顏色也未選時，顯示全部庫存
+    if(!color&&!size) return p.variants.reduce((s,v)=>s+(v.stock||0),0);
+    return 0;
   }
   window.openOrderModal = function(id=null){
     editingOrderId=id;currentOrderItems=[];clearTimeout(autoSaveTimer);
@@ -1204,7 +1213,11 @@ loadFirebase(() => {
             </select>
           </div>
         </div>
-        <div style="font-size:11px;margin-top:4px;${curStock===0?'color:var(--danger);':'color:var(--text-muted);'}">目前庫存：${curStock} 件${curStock===0?' ⚠️ 庫存不足':''}</div>
+        <div style="font-size:11px;margin-top:4px;${curStock===0?'color:var(--danger);font-weight:600;':'color:var(--text-muted);'}">
+          目前庫存：${curStock} 件
+          ${curStock===0?'⚠️ 庫存不足':''}
+          ${!selColor?'（請先選顏色）':!item.size&&sizes.length?'（請選尺寸查看精確庫存）':''}
+        </div>
       </div>`;
     }).join('');
   }
