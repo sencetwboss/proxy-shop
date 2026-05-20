@@ -612,6 +612,10 @@ loadFirebase(() => {
   window.saveCustomer = function(){
     const name=document.getElementById('cust-name').value.trim();
     if(!name){showToast('⚠️ 請輸入客戶名稱');return;}
+    const platform=document.getElementById('cust-platform').value;
+    // 修正2：同名稱+同平台不可重複
+    const dup=customers.find(c=>c.name===name&&c.platform===platform&&c.id!==editingCustomerId);
+    if(dup){showToast('⚠️ 「'+name+'」在「'+platform+'」平台已存在');return;}
     const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
     closeCustomerModal();
     showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
@@ -812,11 +816,16 @@ loadFirebase(() => {
     if(!sku){showToast('⚠️ 請先選擇分類');return;}
     const name=document.getElementById('prod-name').value.trim();
     if(!name){showToast('⚠️ 請輸入品名');return;}
-    // 修正1：品名不可重複（編輯時排除自己）
     const dupName=products.find(p=>p.name===name&&p.id!==editingProductId);
-    if(dupName){showToast(`⚠️ 品名「${name}」已存在（${dupName.sku}）`);return;}
-    // 修正2：貨號不可重複（含已刪除的）
+    if(dupName){showToast('⚠️ 品名「'+name+'」已存在（'+(dupName.sku||'—')+'）');return;}
     if(!editingProductId&&products.find(p=>p.sku===sku)){showToast('⚠️ 貨號已存在');genSKU();return;}
+    // 修正1：顏色/款式名稱不可重複
+    const colorNames=[];let dupColor='';
+    document.querySelectorAll('#prod-colors-container > div[id^="cg-"]').forEach(group=>{
+      const cn=(group.querySelector('.color-name-input')?.value||'').trim();
+      if(cn){if(colorNames.includes(cn))dupColor=cn;else colorNames.push(cn);}
+    });
+    if(dupColor){showToast('⚠️ 顏色/款式「'+dupColor+'」重複，請修正');return;}
     // 收集 variants
     const variants=[];
     document.querySelectorAll('#prod-colors-container > div[id^="cg-"]').forEach(group=>{
@@ -1297,6 +1306,19 @@ loadFirebase(() => {
     document.getElementById('merge-order-id-input').value='';
 
     if(!currentOrderItems.length){window._orderSaving=false;showToast('⚠️ 請至少新增一個品項');return;}
+    // 修正3：同一筆訂單中，同商品+同顏色+同尺寸不可重複
+    const itemKeys=[];
+    let dupItem=null;
+    for(const item of currentOrderItems){
+      const key=item.productId+'|'+(item.color||item.variant||'')+'|'+(item.size||'');
+      if(itemKeys.includes(key)){dupItem=item;break;}
+      itemKeys.push(key);
+    }
+    if(dupItem){
+      window._orderSaving=false;
+      showToast('⚠️ 「'+(dupItem.productName||'')+' '+(dupItem.color||dupItem.variant||'')+'」重複，請合併數量');
+      return;
+    }
 
     // ===== 收集表單資料 =====
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
