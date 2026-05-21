@@ -69,15 +69,18 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .order-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}
 .order-id{font-weight:700;color:var(--accent);font-size:13px;}
 .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;}
-.badge.採買中{background:#FFF7ED;color:#EA580C;border:1px solid #FED7AA;}
+.badge.採買中{background:#F5F3FF;color:#7C3AED;border:1px solid #DDD6FE;}
 .badge.待匯款{background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;}
 .badge.待寄出{background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;}
 .badge.已寄出{background:#F8FAFC;color:#1E293B;border:1px solid #CBD5E1;}
 .badge.已配貨{background:var(--success-light);color:var(--success);}
 .badge.缺貨{background:var(--danger-light);color:var(--danger);}
 .badge.官網訂購中{background:#F3E8FF;color:#7C3AED;}
-/* 訂單卡片狀態 badge 加大 */
-.order-card .badge.採買中,.order-card .badge.待匯款,.order-card .badge.待寄出,.order-card .badge.已寄出{font-size:13px;padding:3px 14px;}
+/* 訂單卡片右上角狀態 badge 加大 */
+.order-card .card-header .badge.採買中,.order-card .card-header .badge.待匯款,.order-card .card-header .badge.待寄出,.order-card .card-header .badge.已寄出{font-size:13px;padding:3px 14px;}
+/* 品項後面的貨品狀況：採買中縮小 */
+.order-items-summary .badge.採買中{font-size:10px;padding:1px 6px;}
+.order-items-summary .badge.已配貨{font-size:12px;padding:2px 8px;}
 .order-items-summary{font-size:12px;color:var(--text-muted);margin-bottom:8px;}
 .order-totals{display:flex;gap:16px;align-items:center;font-size:13px;}
 .order-total-amount{font-weight:700;font-size:15px;}
