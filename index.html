@@ -181,8 +181,10 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
   <nav id="sidebar">
     <div class="sidebar-header">
       <button class="hamburger-close" onclick="toggleSidebar()">✕</button>
-      <span class="sidebar-logo">SENCE.TW</span>
-      <span class="sidebar-title">訂單管理</span>
+      <div style="display:flex;flex-direction:column;line-height:1.3;">
+        <span class="sidebar-logo">SENCE.TW</span>
+        <span class="sidebar-title">訂單管理</span>
+      </div>
     </div>
     <div class="nav-links">
       <a class="nav-item active" onclick="switchPage('customers',this)"><span class="nav-icon">👥</span><span>客戶管理</span></a>
