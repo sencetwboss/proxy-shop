@@ -459,13 +459,13 @@ function loadFirebase(callback) {
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
     'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js',
-    'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js',
   ];
   let loaded = 0;
   scripts.forEach(src => {
     const s = document.createElement('script');
     s.src = src;
     s.onload = () => { loaded++; if(loaded === scripts.length) callback(); };
+    s.onerror = () => { loaded++; if(loaded === scripts.length) callback(); };
     document.head.appendChild(s);
   });
 }
@@ -474,7 +474,8 @@ loadFirebase(() => {
   firebase.initializeApp(FIREBASE_CONFIG);
   const auth = firebase.auth();
   const db = firebase.firestore();
-  const storage = firebase.storage();
+  // storage 改用 Cloudinary，不需要 firebase.storage()
+  const storage = null;
 
   // ===== 台灣時區日期函數 =====
   function getTWDate(){
