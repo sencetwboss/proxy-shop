@@ -69,13 +69,15 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .order-meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px;}
 .order-id{font-weight:700;color:var(--accent);font-size:13px;}
 .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:600;}
-.badge.採買中{background:var(--warn-light);color:var(--warn);}
-.badge.待匯款{background:#FEF3C7;color:#92400E;}
-.badge.待寄出{background:var(--accent-light);color:var(--accent);}
-.badge.已寄出{background:var(--success-light);color:var(--success);}
+.badge.採買中{background:#FFF7ED;color:#EA580C;border:1px solid #FED7AA;}
+.badge.待匯款{background:#FEF2F2;color:#DC2626;border:1px solid #FECACA;}
+.badge.待寄出{background:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;}
+.badge.已寄出{background:#F8FAFC;color:#1E293B;border:1px solid #CBD5E1;}
 .badge.已配貨{background:var(--success-light);color:var(--success);}
 .badge.缺貨{background:var(--danger-light);color:var(--danger);}
 .badge.官網訂購中{background:#F3E8FF;color:#7C3AED;}
+/* 訂單卡片狀態 badge 加大 */
+.order-card .badge.採買中,.order-card .badge.待匯款,.order-card .badge.待寄出,.order-card .badge.已寄出{font-size:13px;padding:3px 14px;}
 .order-items-summary{font-size:12px;color:var(--text-muted);margin-bottom:8px;}
 .order-totals{display:flex;gap:16px;align-items:center;font-size:13px;}
 .order-total-amount{font-weight:700;font-size:15px;}
@@ -1554,22 +1556,22 @@ loadFirebase(() => {
       html+='<div style="overflow-x:auto;">';
       html+='<table style="width:100%;border-collapse:collapse;font-size:13px;">';
       html+='<thead><tr style="background:var(--bg-muted);">';
-      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">日期</th>';
-      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">客戶</th>';
-      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">條碼</th>';
-      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">顏色/尺寸</th>';
-      html+='<th style="padding:8px 10px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap;">類型</th>';
-      html+='<th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;">數量</th>';
-      html+='<th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;">目前庫存</th>';
+      html+='<th style="padding:8px 6px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;width:90px;">日期</th>';
+      html+='<th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;min-width:120px;">客戶</th>';
+      html+='<th style="padding:8px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">條碼</th>';
+      html+='<th style="padding:8px 8px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;">顏色/尺寸</th>';
+      html+='<th style="padding:8px 8px;text-align:center;border-bottom:1px solid var(--border);white-space:nowrap;">類型</th>';
+      html+='<th style="padding:8px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;">數量</th>';
+      html+='<th style="padding:8px 8px;text-align:right;border-bottom:1px solid var(--border);white-space:nowrap;">目前庫存</th>';
       html+='</tr></thead><tbody>';
       allHistory.forEach((h,i)=>{
         const si=sorted.findIndex((s,si2)=>s===h);
         const stockAfter=stockMap[h.date+'_'+h.label+'_'+sorted.indexOf(h)]??'';
         html+='<tr>';
-        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--text-muted);white-space:nowrap;">'+h.date+'</td>';
-        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);">'+esc(h.custName||'-')+'</td>';
-        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);color:var(--accent);font-size:12px;white-space:nowrap;">'+esc(h.barcode||'-')+'</td>';
-        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);">'+esc(h.label)+'</td>';
+        html+='<td style="padding:7px 6px;border-bottom:1px solid var(--border);color:var(--text-muted);white-space:nowrap;font-size:12px;">'+h.date+'</td>';
+        html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);font-weight:500;">'+esc(h.custName||'-')+'</td>';
+        html+='<td style="padding:7px 8px;border-bottom:1px solid var(--border);color:var(--accent);font-size:12px;white-space:nowrap;">'+esc(h.barcode||'-')+'</td>';
+        html+='<td style="padding:7px 8px;border-bottom:1px solid var(--border);">'+esc(h.label)+'</td>';
         html+='<td style="padding:7px 10px;border-bottom:1px solid var(--border);text-align:center;">';
         if(h.type==='in') html+='<span style="background:var(--success-light);color:var(--success);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▲ 入庫</span>';
         else html+='<span style="background:var(--danger-light);color:var(--danger);padding:2px 8px;border-radius:10px;font-size:12px;font-weight:600;">▼ 出庫</span>';
