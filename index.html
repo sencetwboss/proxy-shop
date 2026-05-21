@@ -38,6 +38,11 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 #main-app{display:flex;min-height:100vh;}
 #sidebar{width:var(--sidebar-w);background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;position:fixed;top:0;left:0;height:100vh;z-index:200;transition:transform 0.25s ease;}
 .sidebar-header{padding:20px 16px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;}
+.hamburger-close{display:none;background:none;border:none;font-size:20px;cursor:pointer;color:var(--text-muted);padding:4px 8px;margin-right:4px;}
+@media(max-width:768px){
+  .hamburger-close{display:flex;align-items:center;justify-content:center;}
+  .sidebar-header{padding-top:60px;}
+}
 .sidebar-logo{font-size:13px;font-weight:700;letter-spacing:1px;color:var(--accent);}
 .sidebar-title{font-weight:700;font-size:15px;}
 .nav-links{flex:1;padding:12px 8px;display:flex;flex-direction:column;gap:2px;}
@@ -175,6 +180,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 <div id="main-app" class="hidden">
   <nav id="sidebar">
     <div class="sidebar-header">
+      <button class="hamburger-close" onclick="toggleSidebar()">✕</button>
       <span class="sidebar-logo">SENCE.TW</span>
       <span class="sidebar-title">訂單管理</span>
     </div>
