@@ -670,15 +670,23 @@ loadFirebase(() => {
     const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
     closeCustomerModal();
     showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
-    console.log('[SAVE] db=', db, 'editingId=', editingCustomerId);
-    if(editingCustomerId){
-      db.collection('customers').doc(editingCustomerId).update(data)
-        .then(()=>console.log('[SAVE] updated OK'))
-        .catch(e=>console.error('[SAVE] update error:', e));
-    } else {
-      db.collection('customers').add({...data,createdAt:Date.now()})
-        .then(r=>console.log('[SAVE] added OK, id=', r.id))
-        .catch(e=>console.error('[SAVE] add error:', e));
+    console.log('[SAVE] db=', typeof db, 'collection=', typeof db.collection);
+    try {
+      const colRef = db.collection('customers');
+      console.log('[SAVE] colRef=', typeof colRef);
+      if(editingCustomerId){
+        colRef.doc(editingCustomerId).update(data)
+          .then(()=>console.log('[SAVE] updated OK'))
+          .catch(e=>console.error('[SAVE] update error:', e.code, e.message));
+      } else {
+        console.log('[SAVE] trying to add data:', JSON.stringify(data).slice(0,100));
+        colRef.add({...data,createdAt:Date.now()})
+          .then(r=>{console.log('[SAVE] added OK, id=', r.id);showToast('✅ 已儲存到Firebase id:'+r.id.slice(0,6));})
+          .catch(e=>{console.error('[SAVE] add error:', e.code, e.message);showToast('❌ Firebase錯誤:'+e.message);});
+      }
+    } catch(err) {
+      console.error('[SAVE] exception:', err.message);
+      showToast('❌ 例外錯誤:'+err.message);
     }
   };
   window.deleteCustomer = function(id){
