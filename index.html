@@ -670,8 +670,16 @@ loadFirebase(() => {
     const data={name,platform:document.getElementById('cust-platform').value,note:document.getElementById('cust-note').value.trim(),updatedAt:Date.now()};
     closeCustomerModal();
     showToast(editingCustomerId?'✅ 客戶已更新':'✅ 客戶已新增');
-    if(editingCustomerId){db.collection('customers').doc(editingCustomerId).update(data);}
-    else{db.collection('customers').add({...data,createdAt:Date.now()});}
+    console.log('[SAVE] db=', db, 'editingId=', editingCustomerId);
+    if(editingCustomerId){
+      db.collection('customers').doc(editingCustomerId).update(data)
+        .then(()=>console.log('[SAVE] updated OK'))
+        .catch(e=>console.error('[SAVE] update error:', e));
+    } else {
+      db.collection('customers').add({...data,createdAt:Date.now()})
+        .then(r=>console.log('[SAVE] added OK, id=', r.id))
+        .catch(e=>console.error('[SAVE] add error:', e));
+    }
   };
   window.deleteCustomer = function(id){
     if(!confirm('確定刪除此客戶？'))return;
