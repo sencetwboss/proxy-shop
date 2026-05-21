@@ -2,8 +2,16 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SENCE.TW 訂單管理</title>
+<!-- PWA 設定 -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SENCE.TW">
+<meta name="theme-color" content="#2563EB">
+<link rel="manifest" href="manifest.json">
+<!-- iPhone 圖示 -->
+<link rel="apple-touch-icon" href="icon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -45,7 +53,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .btn-logout:hover{background:var(--danger-light);color:var(--danger);border-color:var(--danger);}
 .hamburger{display:none;position:fixed;top:12px;left:12px;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 10px;font-size:18px;cursor:pointer;box-shadow:var(--shadow);}
 .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:190;}
-#main-content{margin-left:var(--sidebar-w);flex:1;padding:24px;min-height:100vh;}
+#main-content{margin-left:var(--sidebar-w);flex:1;padding:24px;min-height:100vh;padding-bottom:calc(24px + env(safe-area-inset-bottom));}
 .page{display:block;}.page.hidden{display:none;}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;}
 .page-header h2{font-size:20px;font-weight:700;}
@@ -145,7 +153,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
   .sidebar-overlay{display:block;}
   .sidebar-overlay.hidden{display:none!important;}
   .hamburger{display:flex;}
-  #main-content{margin-left:0;padding:12px;padding-top:52px;}
+  #main-content{margin-left:0;padding:12px;padding-top:52px;padding-bottom:calc(12px + env(safe-area-inset-bottom));}
   .product-grid{grid-template-columns:1fr;}
 }
 </style>
@@ -459,6 +467,19 @@ loadFirebase(() => {
   const auth = firebase.auth();
   const db = firebase.firestore();
   const storage = firebase.storage();
+
+  // ===== 台灣時區日期函數 =====
+  function getTWDate(){
+    // 台灣時區 UTC+8
+    const now=new Date();
+    const twOffset=8*60; // 分鐘
+    const utc=now.getTime()+(now.getTimezoneOffset()*60000);
+    const tw=new Date(utc+(twOffset*60000));
+    const y=tw.getFullYear();
+    const m=String(tw.getMonth()+1).padStart(2,'0');
+    const d=String(tw.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  }
 
   // ===== State =====
   let customers=[], products=[], orders=[];
@@ -871,7 +892,7 @@ loadFirebase(() => {
         .then(r=>r.json()).then(d=>d.secure_url||'');
     });
     Promise.all(uploadPromises).then(imageUrls=>{
-      const today=new Date().toISOString().slice(0,10);
+      const today=getTWDate();
       // 修正2：新增時若有庫存量，寫入初始 stockHistory
       const variantsWithHistory=variants.map(v=>{
         if(isEdit){
@@ -983,7 +1004,7 @@ loadFirebase(() => {
   window.confirmStockUpdate = function(){
     const p=products.find(x=>x.id===stockUpdateProductId);if(!p)return;
     closeModal('stock-modal-overlay');
-    const today=new Date().toISOString().slice(0,10);
+    const today=getTWDate();
     const nv=p.variants.map((v,i)=>{
       const inp=document.getElementById(`stock-input-${i}`);
       const add=inp?Number(inp.value)||0:0;
@@ -1075,7 +1096,7 @@ loadFirebase(() => {
     if(cust){document.getElementById('order-customer-search').value=cust.name;si.textContent=`${cust.name}（${cust.platform||''}）`;si.classList.remove('hidden');
       if(cust.note)setTimeout(()=>{document.getElementById('note-modal-content').textContent=cust.note;openModal('note-modal-overlay');},300);
     }else si.classList.add('hidden');
-    document.getElementById('order-date').value=o?.date||new Date().toISOString().slice(0,10);
+    document.getElementById('order-date').value=o?.date||getTWDate();
     document.getElementById('order-status').value=o?.status||'採買中';
     document.getElementById('order-shipping-method').value=o?.shippingMethod||'7-11';
     document.getElementById('order-shipping-fee').value=o?.shippingFee??60;
@@ -1259,7 +1280,7 @@ loadFirebase(() => {
         const vi=p.variants.findIndex(v=>(v.color||v.name||'')===color&&(v.size||'')===(item.size||''));
         if(vi>=0){
           const nv=[...p.variants];
-          const today=new Date().toISOString().slice(0,10);
+          const today=getTWDate();
           const hist=[...(nv[vi].stockHistory||[])];
           if(actualDiff>0) hist.push({date:today,type:'out',qty:actualDiff});
           else hist.push({date:today,type:'in',qty:Math.abs(actualDiff)});
