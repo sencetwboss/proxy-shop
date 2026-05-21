@@ -1516,16 +1516,17 @@ loadFirebase(() => {
     let html='';
     matchedProducts.forEach(p=>{
       const allHistory=[];
-      (p.variants||[]).forEach(v=>{
+      (p.variants||[]).forEach((v,vi)=>{
         const label=(v.color||v.name||'')+(v.size?' / '+v.size:'');
         const labelShort=(v.color||v.name||'')+(v.size?'/'+v.size:'');
+        const barcode=(p.sku||'')+'-'+String(vi+1).padStart(2,'0');
         (v.stockHistory||[]).forEach(h=>{
           if(typeFilter&&h.type!==typeFilter)return;
           if(dateFrom&&h.date<dateFrom)return;
           if(dateTo&&h.date>dateTo)return;
-          // 1. 客戶名稱（出庫時查詢）
+          // 條碼搜尋模式：只顯示符合條碼的款式
+          if(searchMode==='barcode'&&!barcode.toLowerCase().includes(search))return;
           const custName=h.type==='out'?(h.custName||findCustomerForOutStock(p.id,labelShort,h.date,h.qty)):'';
-          const barcode=(p.sku||'')+'-'+String(vi+1).padStart(2,'0');
           allHistory.push({...h,label,currentStock:v.stock??0,custName,barcode});
         });
       });
