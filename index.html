@@ -779,8 +779,9 @@ loadFirebase(() => {
     const used=new Set();
     products.filter(p=>p.category===cat).forEach(p=>{const n=parseInt((p.sku||'').slice(1));if(!isNaN(n))used.add(n);});
     db.collection('meta').doc('deletedSKUs').get().then(snap=>{
-      if(snap.exists())(snap.data()[prefix]||[]).forEach(s=>{const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);});
-      // 修正2：也加入本地記錄的已刪除 SKU
+      // snap.exists 在不同版本可能是函數或屬性
+      const exists=typeof snap.exists==='function'?snap.exists():snap.exists;
+      if(exists)(snap.data()[prefix]||[]).forEach(s=>{const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);});
       (window._localDeletedSKUs||[]).forEach(s=>{if(s[0]===prefix){const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);}});
       let next=1;while(used.has(next))next++;
       document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
@@ -970,7 +971,8 @@ loadFirebase(() => {
       const prefix=p.sku[0];
       // 修正2：先寫入 deletedSKUs，確保成功後再刪商品
       db.collection('meta').doc('deletedSKUs').get().then(snap=>{
-        const ex=snap.exists()?(snap.data()[prefix]||[]):[];
+        const _ex=typeof snap.exists==='function'?snap.exists():snap.exists;
+        const ex=_ex?(snap.data()[prefix]||[]):[];
         if(!ex.includes(p.sku)){
           return db.collection('meta').doc('deletedSKUs').set({[prefix]:[...ex,p.sku]},{merge:true});
         }
