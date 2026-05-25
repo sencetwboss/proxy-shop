@@ -1166,7 +1166,7 @@ loadFirebase(() => {
     // 不彈出備註 modal，避免遮住訂單 modal 導致按鈕無法點擊
     // 自動偵測該客人是否有採買中的舊單（只在新增訂單時）
     if(!editingOrderId){
-      const existingOrder=orders.find(o=>o.customerId===id&&o.status==='採買中');
+      const existingOrder=orders.find(o=>o.customerId===id&&(o.status==='採買中'||o.status==='待匯款'));
       if(existingOrder){
         const itemCount=existingOrder.items?.length||0;
         const orderNo=existingOrder.orderNo||existingOrder.id.slice(0,8);
