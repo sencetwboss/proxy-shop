@@ -66,7 +66,12 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .page-sticky{position:sticky;top:0;z-index:100;background:var(--bg);padding:16px 0 10px;margin-bottom:10px;border-bottom:1px solid var(--border);}
 @media(max-width:768px){
   .page-sticky{top:100px;background:var(--bg);}
-  .page-sticky::before{content:'';display:block;height:100px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:99;}
+}
+/* 手機版漢堡按鈕區域白色背景 */
+@media(max-width:768px){
+  #main-content::before{content:'';display:block;height:0;}
+  .hamburger{background:var(--bg);}
+  #main-app{background:var(--bg);}
 }
 @media(max-width:768px){.page-sticky{top:100px;}}
 .page-header h2{font-size:20px;font-weight:700;}
@@ -167,7 +172,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
   .sidebar-overlay{display:block;}
   .sidebar-overlay.hidden{display:none!important;}
   .hamburger{display:flex;}
-  #main-content{margin-left:0;padding:12px;padding-top:120px;padding-bottom:calc(12px + env(safe-area-inset-bottom));}
+  #main-content{margin-left:0;padding:12px;padding-top:120px;padding-bottom:calc(12px + env(safe-area-inset-bottom));background:var(--bg);}
   .product-grid{grid-template-columns:1fr;}
 }
 </style>
@@ -211,6 +216,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     </div>
   </nav>
   <button class="hamburger" onclick="toggleSidebar()">☰</button>
+  <div id="mobile-top-bar" style="display:none;position:fixed;top:0;left:0;right:0;height:100px;background:var(--bg);z-index:98;pointer-events:none;"></div>
   <div class="sidebar-overlay hidden" id="sidebar-overlay" onclick="toggleSidebar()"></div>
   <main id="main-content">
     <div id="page-customers" class="page">
@@ -608,6 +614,11 @@ loadFirebase(() => {
         if(typeof saveOrder==='function') saveOrder();
       }
     });
+    // 手機版顯示頂部白色背景條
+    if(window.innerWidth<=768){
+      const bar=document.getElementById('mobile-top-bar');
+      if(bar) bar.style.display='block';
+    }
   }
 
   // ===== Helpers =====
