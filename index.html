@@ -104,6 +104,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .customer-actions,.product-actions{display:flex;gap:6px;margin-top:8px;}
 .product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;}
 .product-card{}
+.product-card .card-body{max-height:400px;overflow-y:auto;}
 .product-sku{font-size:12px;color:var(--accent);font-weight:700;background:var(--accent-light);padding:2px 8px;border-radius:20px;}
 .product-category-tag{font-size:11px;color:var(--text-muted);}
 .product-images{display:flex;gap:6px;margin-bottom:10px;}
@@ -851,10 +852,10 @@ loadFirebase(() => {
     row.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:5px;';
     const isProxyRow=window._isProxyProduct||false;
     row.innerHTML=isProxyRow?
-      `<input type="text" placeholder="尺寸（可空白）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
-      <input type="number" min="0" placeholder="售價" value="${s.price!=null?s.price:''}" style="width:70px;" class="size-price">
-      <input type="number" min="0" placeholder="成本" value="${s.cost!=null?s.cost:''}" style="width:70px;" class="size-cost">
-      <input type="number" min="0" value="${s.stock??0}" style="width:60px;" class="size-stock">
+      `<input type="text" placeholder="尺寸" value="${esc(s.size||'')}" style="width:70px;" class="size-name">
+      <input type="number" min="0" placeholder="售價" value="${s.price!=null?s.price:''}" style="flex:1;" class="size-price">
+      <input type="number" min="0" placeholder="成本" value="${s.cost!=null?s.cost:''}" style="flex:1;" class="size-cost">
+      <input type="number" min="0" placeholder="庫存" value="${s.stock??0}" style="flex:1;" class="size-stock">
       <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`
     :
       `<input type="text" placeholder="尺寸（S/M/L...）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
