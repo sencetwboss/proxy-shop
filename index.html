@@ -805,7 +805,9 @@ loadFirebase(() => {
       last.querySelectorAll('[class^="sizes-container-"] > div').forEach(row=>{
         const s=row.querySelector('.size-name')?.value.trim()||'';
         const k=row.querySelector('.size-stock')?.value||'0';
-        if(s)ls.push({size:s,stock:k});
+        const sp=row.querySelector('.size-price')?.value||'';
+        const sc=row.querySelector('.size-cost')?.value||'';
+        if(s||window._isProxyProduct)ls.push({size:s,stock:k,price:sp,cost:sc});
       });
     }
     const gid='cg-'+Date.now()+Math.random().toString(36).slice(2,5);
@@ -836,13 +838,15 @@ loadFirebase(() => {
     if(colorData.sizes?.length){
       toLoad=colorData.sizes;
     } else if(ls.length){
-      // 上一組有尺寸記錄：帶入（含庫存）
+      // 上一組有尺寸記錄：帶入（含庫存、售價、成本）
       toLoad=ls;
     } else {
-      // 上一組沒有尺寸，只帶入庫存量
+      // 上一組沒有尺寸，帶入庫存/售價/成本
       const lastGroup=existing.length>0?existing[existing.length-1]:null;
       const lastStock=lastGroup?lastGroup.querySelector('.size-stock')?.value||'0':'0';
-      toLoad=[{size:'',stock:lastStock}];
+      const lastPrice=lastGroup?lastGroup.querySelector('.size-price')?.value||'':'';
+      const lastCost=lastGroup?lastGroup.querySelector('.size-cost')?.value||'':'';
+      toLoad=[{size:'',stock:lastStock,price:lastPrice,cost:lastCost}];
     }
     toLoad.forEach(s=>addSizeRow(gid,s));
   };
@@ -1001,14 +1005,13 @@ loadFirebase(() => {
   window.deleteProduct = function(id){
     const p=products.find(x=>x.id===id);if(!p)return;
     // 檢查是否有進行中的訂單使用此商品
-    const activeStatus=['採買中','待匯款','待寄出'];
+    // 修正2：只要有任何訂單使用此商品就不可刪除（包含已寄出）
     const usingOrders=orders.filter(o=>
-      activeStatus.includes(o.status||'採買中')&&
       (o.items||[]).some(item=>item.productId===id)
     );
     if(usingOrders.length>0){
       const orderNos=usingOrders.map(o=>o.orderNo||o.id.slice(0,8)).join('、');
-      showToast('⚠️ 此商品有進行中的訂單（'+orderNos+'），無法刪除');
+      showToast('⚠️ 此商品有訂單使用中（'+orderNos+'），無法刪除');
       return;
     }
     if(!confirm('確定刪除「'+(p.name||p.sku)+'」？刪除後貨號不可再使用'))return;
@@ -1336,8 +1339,17 @@ loadFirebase(() => {
   window.onColor = function(idx,val){
     currentOrderItems[idx].color=val;currentOrderItems[idx].variant=val;currentOrderItems[idx].size='';
     const p=products.find(x=>x.id===currentOrderItems[idx].productId);
-    const v=p?.variants?.find(x=>(x.color||x.name||'')===val);
-    if(v?.price!=null)currentOrderItems[idx].priceSnapshot=v.price;
+    // 找該顏色的所有款式
+    const colorVariants=(p?.variants||[]).filter(x=>(x.color||x.name||'')===val);
+    if(colorVariants.length===1){
+      // 只有一個尺寸，直接帶入價格和尺寸
+      const v=colorVariants[0];
+      if(v.price!=null) currentOrderItems[idx].priceSnapshot=v.price;
+      currentOrderItems[idx].size=v.size||'';
+    } else if(colorVariants.length>1){
+      // 多個尺寸，先不帶價格，等選完尺寸再更新
+      currentOrderItems[idx].priceSnapshot=0;
+    }
     renderOrderItems();calcOrderTotal();triggerAutoSave();
   };
   window.onAllot = function(idx,val){
@@ -1376,8 +1388,16 @@ loadFirebase(() => {
       const el=document.getElementById('sub-'+idx);if(el)el.textContent='NT$ '+s.toLocaleString();
       calcOrderTotal();
     }
-    // 尺寸變動時重新渲染，讓目前庫存即時更新
-    if(field==='size'||field==='color'){
+    // 選尺寸時同步更新價格（代購商品每個尺寸有獨立售價）
+    if(field==='size'){
+      const item=currentOrderItems[idx];
+      const p=products.find(x=>x.id===item.productId);
+      const color=item.color||item.variant||'';
+      const v=(p?.variants||[]).find(x=>(x.color||x.name||'')===color&&(x.size||'')===val);
+      if(v?.price!=null) currentOrderItems[idx].priceSnapshot=v.price;
+      renderOrderItems();
+    }
+    if(field==='color'){
       renderOrderItems();
     }
     triggerAutoSave();
