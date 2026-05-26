@@ -228,7 +228,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
         <select id="filter-product-category" onchange="renderProducts()">
           <option value="">全部分類</option><option value="服飾">服飾</option><option value="代購">代購</option>
         </select>
-        <input id="filter-product-search" placeholder="搜尋商品名稱/貨號" oninput="renderProducts()">
+        <input id="filter-product-search" placeholder="搜尋商品名稱/貨號/款式" oninput="renderProducts()">
       </div>
       <div id="products-list"></div>
     </div>
@@ -705,7 +705,12 @@ loadFirebase(() => {
     let list=[...products].sort((a,b)=>(parseInt((b.sku||'').slice(1))||0)-(parseInt((a.sku||'').slice(1))||0))
       .filter(p=>{
         if(cat&&p.category!==cat)return false;
-        if(search&&!p.name?.toLowerCase().includes(search)&&!p.sku?.toLowerCase().includes(search))return false;
+        if(search){
+          const nameMatch=p.name?.toLowerCase().includes(search);
+          const skuMatch=p.sku?.toLowerCase().includes(search);
+          const variantMatch=(p.variants||[]).some(v=>(v.color||v.name||'').toLowerCase().includes(search)||(v.size||'').toLowerCase().includes(search));
+          if(!nameMatch&&!skuMatch&&!variantMatch)return false;
+        }
         return true;
       });
     const el=document.getElementById('products-list');if(!el)return;
