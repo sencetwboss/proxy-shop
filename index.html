@@ -217,7 +217,12 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
       <div id="customers-list"></div>
     </div>
     <div id="page-products" class="page hidden">
-      <div class="page-header"><h2>商品管理</h2><button class="btn primary" onclick="openProductModal()">＋ 新增商品</button></div>
+      <div class="page-header"><h2>商品管理</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn primary" onclick="openProductModal('服飾')">＋ 新增服飾</button>
+          <button class="btn primary" onclick="openProductModal('代購')">＋ 新增代購商品</button>
+        </div>
+      </div>
       <div class="filter-bar">
         <select id="filter-product-category" onchange="renderProducts()">
           <option value="">全部分類</option><option value="服飾">服飾</option><option value="代購">代購</option>
@@ -287,24 +292,21 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 <!-- 商品 Modal -->
 <div class="modal-overlay hidden" id="product-modal-overlay">
   <div class="modal large">
-    <div class="modal-header"><h3 id="product-modal-title">新增商品</h3><button class="modal-close" onclick="closeProductModal()">✕</button></div>
+    <div class="modal-header"><h3 id="product-modal-title">新增服飾</h3><button class="modal-close" onclick="closeProductModal()">✕</button></div>
     <div class="modal-body">
+      <!-- 隱藏的分類欄位 -->
+      <input type="hidden" id="prod-category">
       <div class="form-row">
-        <div class="form-group"><label>商品分類 <span class="req">*</span></label>
-          <select id="prod-category" onchange="onCategoryChange()"><option value="">請選擇...</option><option value="服飾">服飾</option><option value="代購">代購</option></select>
-        </div>
         <div class="form-group"><label>貨號（自動產生）</label><input id="prod-sku" readonly style="background:var(--bg-muted);color:var(--accent)"></div>
-      </div>
-      <div class="form-row">
         <div class="form-group"><label>廠商（購買處）</label><input id="prod-vendor" placeholder="廠商名稱"></div>
-        <div class="form-group">
-          <label>品名</label>
-          <input id="prod-name" placeholder="商品名稱" oninput="checkDupName()">
-          <div id="prod-name-warn" style="display:none;color:var(--danger);font-size:12px;margin-top:4px;padding:5px 8px;background:var(--danger-light);border-radius:4px;"></div>
-        </div>
       </div>
       <div class="form-group">
-        <label>款式 / 顏色 → 尺寸</label>
+        <label>品名</label>
+        <input id="prod-name" placeholder="商品名稱" oninput="checkDupName()">
+        <div id="prod-name-warn" style="display:none;color:var(--danger);font-size:12px;margin-top:4px;padding:5px 8px;background:var(--danger-light);border-radius:4px;"></div>
+      </div>
+      <div class="form-group">
+        <label id="prod-variants-label">款式 / 顏色 → 尺寸</label>
         <div id="prod-colors-container"></div>
         <button class="btn outline small" onclick="addColorGroup()">＋ 新增顏色/款式</button>
       </div>
@@ -809,17 +811,20 @@ loadFirebase(() => {
     const div=document.createElement('div');
     div.id=gid;
     div.style.cssText='border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-muted);';
+    const isProxy=window._isProxyProduct||false;
     div.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
       <div style="flex:2;min-width:100px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">顏色/款式名稱</div>
         <input type="text" placeholder="黑色、白色..." value="${esc(colorData.color||colorData.name||'')}" class="color-name-input" style="width:100%;"></div>
-      <div style="width:90px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">售價</div>
+      ${!isProxy?`<div style="width:90px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">售價</div>
         <input type="number" min="0" value="${colorData.price!=null?colorData.price:lp}" class="color-price-input" style="width:100%;"></div>
       <div style="width:80px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">成本</div>
-        <input type="number" min="0" value="${colorData.cost!=null?colorData.cost:lc}" class="color-cost-input" style="width:100%;"></div>
+        <input type="number" min="0" value="${colorData.cost!=null?colorData.cost:lc}" class="color-cost-input" style="width:100%;"></div>`:'<input type="hidden" class="color-price-input" value="0"><input type="hidden" class="color-cost-input" value="0">'}
       <button class="btn danger small" onclick="document.getElementById('${gid}').remove()">✕</button>
     </div>
     <div style="margin-left:8px;">
-      <div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">尺寸：</div>
+      ${isProxy?`<div style="display:flex;gap:8px;font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">
+        <span style="flex:2;">尺寸</span><span style="width:70px;text-align:center;">售價</span><span style="width:70px;text-align:center;">成本</span><span style="width:60px;text-align:center;">庫存</span><span style="width:30px;"></span>
+      </div>`:'<div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">尺寸：</div>'}
       <div class="sizes-container-${gid}"></div>
       <button class="btn outline small" onclick="addSizeRow('${gid}')">＋ 新增尺寸</button>
     </div>`;
@@ -842,7 +847,15 @@ loadFirebase(() => {
     const c=document.querySelector('.sizes-container-'+gid);if(!c)return;
     const row=document.createElement('div');
     row.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:5px;';
-    row.innerHTML=`<input type="text" placeholder="尺寸（S/M/L...）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
+    const isProxyRow=window._isProxyProduct||false;
+    row.innerHTML=isProxyRow?
+      `<input type="text" placeholder="尺寸（可空白）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
+      <input type="number" min="0" placeholder="售價" value="${s.price!=null?s.price:''}" style="width:70px;" class="size-price">
+      <input type="number" min="0" placeholder="成本" value="${s.cost!=null?s.cost:''}" style="width:70px;" class="size-cost">
+      <input type="number" min="0" value="${s.stock??0}" style="width:60px;" class="size-stock">
+      <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`
+    :
+      `<input type="text" placeholder="尺寸（S/M/L...）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
       <input type="number" min="0" value="${s.stock??0}" style="width:70px;" class="size-stock">
       <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`;
     c.appendChild(row);
@@ -858,24 +871,48 @@ loadFirebase(() => {
     a.innerHTML=tempProductImages.map((img,i)=>`<div class="img-preview-wrap"><img src="${img.url}"><button class="img-remove" onclick="removeImg(${i})">✕</button></div>`).join('');
   }
   window.removeImg = function(i){tempProductImages.splice(i,1);renderImgPreviews();};
-  window.openProductModal = function(id=null){
+  window.openProductModal = function(id=null, category=null){
     editingProductId=id;tempProductImages=[];
     const p=id?products.find(x=>x.id===id):null;
-    document.getElementById('product-modal-title').textContent=id?'編輯商品':'新增商品';
-    document.getElementById('prod-category').value=p?(p.category||''):'';
+    // 分類：編輯時用原本的，新增時用傳入的參數
+    const cat=p?.category||(category||'服飾');
+    const isProxy=cat==='代購';
+    document.getElementById('prod-category').value=cat;
+    document.getElementById('product-modal-title').textContent=id?(isProxy?'編輯代購商品':'編輯服飾'):(isProxy?'新增代購商品':'新增服飾');
+    // 代購商品顯示不同的款式標籤
+    const varLabel=document.getElementById('prod-variants-label');
+    if(varLabel) varLabel.textContent=isProxy?'款式 / 顏色':'款式 / 顏色 → 尺寸';
     document.getElementById('prod-sku').value=p?(p.sku||''):'';
     document.getElementById('prod-vendor').value=p?(p.vendor||''):'';
     document.getElementById('prod-name').value=p?(p.name||''):'';
     document.getElementById('prod-colors-container').innerHTML='';
+    // 儲存目前的代購模式（讓 addColorGroup 知道要顯示什麼）
+    window._isProxyProduct=isProxy;
     if(p?.variants?.length){
       const cm={};
-      p.variants.forEach(v=>{const k=v.color||v.name||'';if(!cm[k])cm[k]={color:k,price:v.price,cost:v.cost,sizes:[]};cm[k].sizes.push({size:v.size||'',stock:v.stock??0});});
+      p.variants.forEach(v=>{const k=v.color||v.name||'';if(!cm[k])cm[k]={color:k,price:v.price,cost:v.cost,sizes:[]};cm[k].sizes.push({size:v.size||'',stock:v.stock??0,price:v.price,cost:v.cost});});
       Object.values(cm).forEach(cg=>addColorGroup(cg));
     }
     if(p?.images?.length)p.images.forEach(url=>tempProductImages.push({file:null,url,existing:true,storedUrl:url}));
     renderImgPreviews();
     const btn=document.getElementById('save-product-btn');
     if(btn){btn.disabled=false;btn.textContent='💾 儲存';}
+    // 新增時自動產生貨號
+    if(!id){
+      const prefix=isProxy?'N':'A';
+      const used=new Set();
+      products.filter(q=>q.category===cat).forEach(q=>{const n=parseInt((q.sku||'').slice(1));if(!isNaN(n))used.add(n);});
+      db.collection('meta').doc('deletedSKUs').get().then(snap=>{
+        const exists=typeof snap.exists==='function'?snap.exists():snap.exists;
+        if(exists)(snap.data()[prefix]||[]).forEach(s=>{const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);});
+        (window._localDeletedSKUs||[]).forEach(s=>{if(s[0]===prefix){const n=parseInt(s.slice(1));if(!isNaN(n))used.add(n);}});
+        let next=1;while(used.has(next))next++;
+        document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
+      }).catch(()=>{
+        let next=1;while(used.has(next))next++;
+        document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
+      });
+    }
     openModal('product-modal-overlay');
   };
   window.saveProduct = function(){
@@ -904,7 +941,12 @@ loadFirebase(() => {
       group.querySelectorAll('.sizes-container-'+group.id+' > div').forEach(sr=>{
         const sz=sr.querySelector('.size-name')?.value.trim()||'';
         const st=Number(sr.querySelector('.size-stock')?.value||0);
-        if(cn||sz)variants.push({color:cn,name:cn,size:sz,price:pr!==''&&pr!=null?Number(pr):null,cost:co!==''&&co!=null?Number(co):null,stock:st});
+        // 代購：每個尺寸有獨立售價/成本
+        const szPrice=sr.querySelector('.size-price')?.value;
+        const szCost=sr.querySelector('.size-cost')?.value;
+        const finalPrice=szPrice!==undefined?(szPrice!==''?Number(szPrice):null):(pr!==''&&pr!=null?Number(pr):null);
+        const finalCost=szCost!==undefined?(szCost!==''?Number(szCost):null):(co!==''&&co!=null?Number(co):null);
+        if(cn||sz)variants.push({color:cn,name:cn,size:sz,price:finalPrice,cost:finalCost,stock:st});
       });
     });
     const vendor=document.getElementById('prod-vendor').value.trim();
