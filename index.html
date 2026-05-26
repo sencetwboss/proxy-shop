@@ -825,8 +825,8 @@ loadFirebase(() => {
       <button class="btn danger small" onclick="document.getElementById('${gid}').remove()">✕</button>
     </div>
     <div style="margin-left:8px;">
-      ${isProxy?`<div style="display:flex;gap:8px;font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">
-        <span style="flex:2;">尺寸</span><span style="width:70px;text-align:center;">售價</span><span style="width:70px;text-align:center;">成本</span><span style="width:60px;text-align:center;">庫存</span><span style="width:30px;"></span>
+      ${isProxy?`<div style="display:flex;gap:6px;font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">
+        <span style="width:160px;">尺寸</span><span style="width:50px;text-align:center;">售價</span><span style="width:50px;text-align:center;">成本</span><span style="width:30px;text-align:center;">庫存</span><span style="width:30px;"></span>
       </div>`:'<div style="font-size:11px;color:var(--text-muted);font-weight:600;margin-bottom:4px;">尺寸：</div>'}
       <div class="sizes-container-${gid}"></div>
       <button class="btn outline small" onclick="addSizeRow('${gid}')">＋ 新增尺寸</button>
@@ -852,10 +852,10 @@ loadFirebase(() => {
     row.style.cssText='display:flex;gap:6px;align-items:center;margin-bottom:5px;';
     const isProxyRow=window._isProxyProduct||false;
     row.innerHTML=isProxyRow?
-      `<input type="text" placeholder="尺寸" value="${esc(s.size||'')}" style="width:70px;" class="size-name">
-      <input type="number" min="0" placeholder="售價" value="${s.price!=null?s.price:''}" style="flex:1;" class="size-price">
-      <input type="number" min="0" placeholder="成本" value="${s.cost!=null?s.cost:''}" style="flex:1;" class="size-cost">
-      <input type="number" min="0" placeholder="庫存" value="${s.stock??0}" style="flex:1;" class="size-stock">
+      `<input type="text" placeholder="尺寸" value="${esc(s.size||'')}" style="width:160px;" class="size-name">
+      <input type="number" min="0" placeholder="售價" value="${s.price!=null?s.price:''}" style="width:50px;" class="size-price">
+      <input type="number" min="0" placeholder="成本" value="${s.cost!=null?s.cost:''}" style="width:50px;" class="size-cost">
+      <input type="number" min="0" placeholder="庫存" value="${s.stock??0}" style="width:30px;" class="size-stock">
       <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`
     :
       `<input type="text" placeholder="尺寸（S/M/L...）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
