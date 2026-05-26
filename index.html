@@ -65,7 +65,8 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .page-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:0;}
 .page-sticky{position:sticky;top:0;z-index:100;background:var(--bg);padding:16px 0 10px;margin-bottom:10px;border-bottom:1px solid var(--border);}
 @media(max-width:768px){
-  .page-sticky{top:100px;}
+  .page-sticky{top:100px;background:var(--bg);}
+  .page-sticky::before{content:'';display:block;height:100px;background:var(--bg);position:fixed;top:0;left:0;right:0;z-index:99;}
 }
 @media(max-width:768px){.page-sticky{top:100px;}}
 .page-header h2{font-size:20px;font-weight:700;}
