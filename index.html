@@ -226,7 +226,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
         <div class="filter-bar" style="margin-top:10px;">
           <input id="filter-customer-search" placeholder="搜尋客戶名稱..." oninput="renderCustomers()">
           <select id="filter-customer-platform" onchange="renderCustomers()">
-            <option value="">全部平台</option><option>Line@</option><option>賣貨便</option><option>IG</option><option>Threads</option>
+            <option value="">全部平台</option><option>Line@</option><option>賣貨便</option><option>IG</option><option>Threads</option><option>其他</option>
           </select>
         </div>
       </div>
@@ -302,7 +302,7 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
     <div class="modal-body">
       <div class="form-group"><label>客戶名稱（可加 emoji）<span class="req">*</span></label><input id="cust-name" placeholder="例：小美 🌸"></div>
       <div class="form-group"><label>下單平台來源</label>
-        <select id="cust-platform"><option>Line@</option><option>賣貨便</option><option>IG</option><option>Threads</option></select>
+        <select id="cust-platform"><option>Line@</option><option>賣貨便</option><option>IG</option><option>Threads</option><option>其他</option></select>
       </div>
       <div class="form-group"><label>備註</label><textarea id="cust-note" rows="3" placeholder="客戶備註..."></textarea></div>
     </div>
@@ -1471,8 +1471,8 @@ loadFirebase(() => {
   window.rmItem = function(idx){currentOrderItems.splice(idx,1);renderOrderItems();calcOrderTotal();triggerAutoSave();};
   window.calcOrderTotal = function(){
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
-    const m=document.getElementById('order-shipping-method')?.value||'7-11';
-    const ship=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
+    const m=document.getElementById('order-shipping-method')?.value||'';
+    const ship=!m?0:(m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180));
     const c=Number(document.getElementById('order-coupon')?.value||0);
     const cr=Number(document.getElementById('order-credit')?.value||0);
     const pr=Number(document.getElementById('order-prepaid')?.value||0);
