@@ -113,7 +113,8 @@ input,select,textarea,button{font-family:var(--font);font-size:14px;}
 .customer-info h4{font-size:15px;margin-bottom:4px;}
 .platform-tag{display:inline-block;padding:2px 8px;background:var(--accent-light);color:var(--accent);border-radius:20px;font-size:11px;font-weight:600;}
 .customer-actions,.product-actions{display:flex;gap:6px;margin-top:8px;}
-.product-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:12px;}
+.product-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
+@media(max-width:600px){.product-grid{grid-template-columns:1fr;}}
 .product-card{}
 .product-card .card-body{max-height:400px;overflow-y:auto;}
 .product-sku{font-size:12px;color:var(--accent);font-weight:700;background:var(--accent-light);padding:2px 8px;border-radius:20px;}
@@ -848,7 +849,26 @@ loadFirebase(() => {
     div.style.cssText='border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-muted);';
     const isProxy=!!(window._isProxyProduct);
     console.log('[addColorGroup] isProxy=', isProxy, window._isProxyProduct);
+    div.draggable=true;
+    div.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',gid);div.style.opacity='0.5';});
+    div.addEventListener('dragend',()=>{div.style.opacity='1';});
+    div.addEventListener('dragover',e=>{e.preventDefault();div.style.border='2px dashed var(--accent)';});
+    div.addEventListener('dragleave',()=>{div.style.border='1px solid var(--border)';});
+    div.addEventListener('drop',e=>{
+      e.preventDefault();div.style.border='1px solid var(--border)';
+      const fromId=e.dataTransfer.getData('text/plain');
+      const fromEl=document.getElementById(fromId);
+      const container=document.getElementById('prod-colors-container');
+      if(fromEl&&fromEl!==div){
+        const els=[...container.children];
+        const fromIdx=els.indexOf(fromEl);
+        const toIdx=els.indexOf(div);
+        if(fromIdx<toIdx) container.insertBefore(fromEl,div.nextSibling);
+        else container.insertBefore(fromEl,div);
+      }
+    });
     div.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
+      <div style="cursor:grab;font-size:16px;color:var(--text-muted);padding:0 4px;align-self:center;" title="拖曳排序">⠿</div>
       <div style="flex:2;min-width:100px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">顏色/款式名稱</div>
         <input type="text" placeholder="黑色、白色..." value="${esc(colorData.color||colorData.name||'')}" class="color-name-input" style="width:100%;"></div>
       ${!isProxy?`<div style="width:90px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">售價</div>
@@ -897,6 +917,28 @@ loadFirebase(() => {
       `<input type="text" placeholder="尺寸（S/M/L...）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
       <input type="number" min="0" value="${s.stock??0}" style="width:70px;" class="size-stock">
       <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`;
+    // 尺寸拖曳排序
+    row.draggable=true;
+    row.addEventListener('dragstart',e=>{e.dataTransfer.setData('size-row','1');row._dragging=true;row.style.opacity='0.5';});
+    row.addEventListener('dragend',()=>{row.style.opacity='1';row._dragging=false;});
+    row.addEventListener('dragover',e=>{e.preventDefault();row.style.background='var(--accent-light)';});
+    row.addEventListener('dragleave',()=>{row.style.background='';});
+    row.addEventListener('drop',e=>{
+      e.preventDefault();row.style.background='';
+      const dragging=c.querySelector('div[style*="opacity: 0.5"]')||[...c.children].find(r=>r._dragging);
+      if(dragging&&dragging!==row){
+        const rows=[...c.children];
+        const fi=rows.indexOf(dragging);
+        const ti=rows.indexOf(row);
+        if(fi<ti) c.insertBefore(dragging,row.nextSibling);
+        else c.insertBefore(dragging,row);
+      }
+    });
+    // 在尺寸行前加拖曳圖示
+    const handle=document.createElement('span');
+    handle.textContent='⠿';
+    handle.style.cssText='cursor:grab;font-size:14px;color:var(--text-muted);padding:0 4px;';
+    row.insertBefore(handle,row.firstChild);
     c.appendChild(row);
   };
   window.handleProductImages = function(e){
