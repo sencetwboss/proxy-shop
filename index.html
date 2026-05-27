@@ -1487,7 +1487,7 @@ loadFirebase(() => {
     if(!custId||!currentOrderItems.length)return Promise.resolve();
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
     const m=document.getElementById('order-shipping-method').value;
-    const sf=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
+    const sf=!m?0:(m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180));
     const data={customerId:custId,date:document.getElementById('order-date').value,status:document.getElementById('order-status').value,
       shippingMethod:m,shippingFee:sf,coupon:Number(document.getElementById('order-coupon').value||0),
       credit:Number(document.getElementById('order-credit').value||0),prepaid:Number(document.getElementById('order-prepaid').value||0),
@@ -1557,7 +1557,7 @@ loadFirebase(() => {
     // ===== 收集表單資料 =====
     const sub=currentOrderItems.reduce((s,i)=>s+(i.qty||1)*(i.priceSnapshot||0),0);
     const m=document.getElementById('order-shipping-method').value;
-    const sf=m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180);
+    const sf=!m?0:(m==='7-11'?(sub>=3000?0:60):(sub>=5000?0:180));
     const theDate=document.getElementById('order-date').value;
     const orderData={
       customerId:custId,date:theDate,
