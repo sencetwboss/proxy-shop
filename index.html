@@ -839,7 +839,8 @@ loadFirebase(() => {
     else container.insertBefore(items[newIdx],el);
   };
   window.moveSizeRow = function(btn, dir){
-    const row=btn.closest('div[style]')||btn.parentElement.parentElement;
+    // btn 在 sizeHandle div 裡，sizeHandle 在 row 裡
+    const row=btn.parentElement.parentElement;
     const c=row.parentElement;
     if(!c)return;
     const rows=[...c.children];
