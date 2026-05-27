@@ -1245,7 +1245,7 @@ loadFirebase(() => {
     }else si.classList.add('hidden');
     document.getElementById('order-date').value=o?.date||getTWDate();
     document.getElementById('order-status').value=o?.status||'採買中';
-    document.getElementById('order-shipping-method').value=o?.shippingMethod||'7-11';
+    document.getElementById('order-shipping-method').value=o?.shippingMethod||'';
     const sfEl2=document.getElementById('order-shipping-fee');
     if(sfEl2) sfEl2.textContent=o?.shippingFee!=null?('NT$ '+o.shippingFee):'請選擇...';
     document.getElementById('order-coupon').value=o?.coupon??0;
