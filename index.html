@@ -827,6 +827,28 @@ loadFirebase(() => {
       document.getElementById('prod-sku').value=prefix+String(next).padStart(2,'0');
     });
   }
+  window.moveColorGroup = function(gid, dir){
+    const el=document.getElementById(gid);
+    const container=document.getElementById('prod-colors-container');
+    if(!el||!container)return;
+    const items=[...container.children];
+    const idx=items.indexOf(el);
+    const newIdx=idx+dir;
+    if(newIdx<0||newIdx>=items.length)return;
+    if(dir===-1) container.insertBefore(el,items[newIdx]);
+    else container.insertBefore(items[newIdx],el);
+  };
+  window.moveSizeRow = function(btn, dir){
+    const row=btn.closest('div[style]')||btn.parentElement.parentElement;
+    const c=row.parentElement;
+    if(!c)return;
+    const rows=[...c.children];
+    const idx=rows.indexOf(row);
+    const newIdx=idx+dir;
+    if(newIdx<0||newIdx>=rows.length)return;
+    if(dir===-1) c.insertBefore(row,rows[newIdx]);
+    else c.insertBefore(rows[newIdx],row);
+  };
   window.addColorGroup = function(colorData={}){
     const container=document.getElementById('prod-colors-container');
     let lp='',lc='',ls=[];
@@ -849,26 +871,11 @@ loadFirebase(() => {
     div.style.cssText='border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:10px;background:var(--bg-muted);';
     const isProxy=!!(window._isProxyProduct);
     console.log('[addColorGroup] isProxy=', isProxy, window._isProxyProduct);
-    div.draggable=true;
-    div.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',gid);div.style.opacity='0.5';});
-    div.addEventListener('dragend',()=>{div.style.opacity='1';});
-    div.addEventListener('dragover',e=>{e.preventDefault();div.style.border='2px dashed var(--accent)';});
-    div.addEventListener('dragleave',()=>{div.style.border='1px solid var(--border)';});
-    div.addEventListener('drop',e=>{
-      e.preventDefault();div.style.border='1px solid var(--border)';
-      const fromId=e.dataTransfer.getData('text/plain');
-      const fromEl=document.getElementById(fromId);
-      const container=document.getElementById('prod-colors-container');
-      if(fromEl&&fromEl!==div){
-        const els=[...container.children];
-        const fromIdx=els.indexOf(fromEl);
-        const toIdx=els.indexOf(div);
-        if(fromIdx<toIdx) container.insertBefore(fromEl,div.nextSibling);
-        else container.insertBefore(fromEl,div);
-      }
-    });
     div.innerHTML=`<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;flex-wrap:wrap;">
-      <div style="cursor:grab;font-size:16px;color:var(--text-muted);padding:0 4px;align-self:center;" title="拖曳排序">⠿</div>
+      <div style="display:flex;flex-direction:column;gap:2px;align-self:center;">
+        <button type="button" onclick="moveColorGroup('${gid}',-1)" style="background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;padding:1px 6px;font-size:11px;line-height:1.2;">▲</button>
+        <button type="button" onclick="moveColorGroup('${gid}',1)" style="background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;padding:1px 6px;font-size:11px;line-height:1.2;">▼</button>
+      </div>
       <div style="flex:2;min-width:100px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">顏色/款式名稱</div>
         <input type="text" placeholder="黑色、白色..." value="${esc(colorData.color||colorData.name||'')}" class="color-name-input" style="width:100%;"></div>
       ${!isProxy?`<div style="width:90px;"><div style="font-size:11px;color:var(--text-muted);margin-bottom:3px;">售價</div>
@@ -917,28 +924,12 @@ loadFirebase(() => {
       `<input type="text" placeholder="尺寸（S/M/L...）" value="${esc(s.size||'')}" style="flex:2;" class="size-name">
       <input type="number" min="0" value="${s.stock??0}" style="width:70px;" class="size-stock">
       <button class="btn outline small" style="padding:4px 7px;" onclick="this.parentElement.remove()">✕</button>`;
-    // 尺寸拖曳排序
-    row.draggable=true;
-    row.addEventListener('dragstart',e=>{e.dataTransfer.setData('size-row','1');row._dragging=true;row.style.opacity='0.5';});
-    row.addEventListener('dragend',()=>{row.style.opacity='1';row._dragging=false;});
-    row.addEventListener('dragover',e=>{e.preventDefault();row.style.background='var(--accent-light)';});
-    row.addEventListener('dragleave',()=>{row.style.background='';});
-    row.addEventListener('drop',e=>{
-      e.preventDefault();row.style.background='';
-      const dragging=c.querySelector('div[style*="opacity: 0.5"]')||[...c.children].find(r=>r._dragging);
-      if(dragging&&dragging!==row){
-        const rows=[...c.children];
-        const fi=rows.indexOf(dragging);
-        const ti=rows.indexOf(row);
-        if(fi<ti) c.insertBefore(dragging,row.nextSibling);
-        else c.insertBefore(dragging,row);
-      }
-    });
-    // 在尺寸行前加拖曳圖示
-    const handle=document.createElement('span');
-    handle.textContent='⠿';
-    handle.style.cssText='cursor:grab;font-size:14px;color:var(--text-muted);padding:0 4px;';
-    row.insertBefore(handle,row.firstChild);
+    // 上移/下移按鈕
+    const sizeHandle=document.createElement('div');
+    sizeHandle.style.cssText='display:flex;flex-direction:column;gap:2px;align-self:center;';
+    sizeHandle.innerHTML=`<button type="button" onclick="moveSizeRow(this,-1)" style="background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;padding:1px 5px;font-size:10px;line-height:1.2;">▲</button>
+      <button type="button" onclick="moveSizeRow(this,1)" style="background:none;border:1px solid var(--border);border-radius:3px;cursor:pointer;padding:1px 5px;font-size:10px;line-height:1.2;">▼</button>`;
+    row.insertBefore(sizeHandle,row.firstChild);
     c.appendChild(row);
   };
   window.handleProductImages = function(e){
