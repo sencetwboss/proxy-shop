@@ -958,6 +958,9 @@ loadFirebase(() => {
     document.getElementById('prod-sku').value=p?(p.sku||''):'';
     document.getElementById('prod-vendor').value=p?(p.vendor||''):'';
     document.getElementById('prod-name').value=p?(p.name||''):'';
+    // 清除品名重複警告
+    const nameWarn=document.getElementById('prod-name-warn');
+    if(nameWarn) nameWarn.style.display='none';
     document.getElementById('prod-colors-container').innerHTML='';
     // 儲存目前的代購模式（讓 addColorGroup 知道要顯示什麼）
     window._isProxyProduct=isProxy;
